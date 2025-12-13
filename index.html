@@ -1,0 +1,957 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.01//EN" "http://www.w3.org/TR/html4/strict.dtd">
+<html>
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+  <meta http-equiv="Content-Style-Type" content="text/css">
+  <title></title>
+  <meta name="Generator" content="Cocoa HTML Writer">
+  <meta name="CocoaVersion" content="2685.1">
+  <style type="text/css">
+    p.p1 {margin: 0.0px 0.0px 0.0px 0.0px; font: 12.0px Helvetica}
+    p.p2 {margin: 0.0px 0.0px 0.0px 0.0px; font: 12.0px Helvetica; min-height: 14.0px}
+  </style>
+</head>
+<body>
+<p class="p1">&lt;!doctype html&gt;</p>
+<p class="p1">&lt;html lang="fr"&gt;</p>
+<p class="p1">&lt;head&gt;</p>
+<p class="p1">&lt;meta charset="utf-8"&gt;</p>
+<p class="p1">&lt;title&gt;Brioude 2026, a tale of AURA&lt;/title&gt;</p>
+<p class="p1">&lt;meta name="viewport" content="width=device-width, initial-scale=1"&gt;</p>
+<p class="p1">&lt;style&gt;</p>
+<p class="p1"><span class="Apple-converted-space">  </span>body{margin:0;background:#000;display:flex;justify-content:center;align-items:center;height:100vh}</p>
+<p class="p1"><span class="Apple-converted-space">  </span>canvas{width:640px;height:480px;image-rendering:pixelated;background:#f3f0da}</p>
+<p class="p1">&lt;/style&gt;</p>
+<p class="p1">&lt;/head&gt;</p>
+<p class="p1">&lt;body&gt;</p>
+<p class="p1">&lt;canvas id="game" width="320" height="240"&gt;&lt;/canvas&gt;</p>
+<p class="p2"><br></p>
+<p class="p1">&lt;script&gt;</p>
+<p class="p1">(() =&gt; {</p>
+<p class="p1"><span class="Apple-converted-space">  </span>/* =======================</p>
+<p class="p1"><span class="Apple-converted-space">     </span>CANVAS</p>
+<p class="p1"><span class="Apple-converted-space">  </span>======================= */</p>
+<p class="p1"><span class="Apple-converted-space">  </span>const canvas = document.getElementById("game");</p>
+<p class="p1"><span class="Apple-converted-space">  </span>const ctx = canvas.getContext("2d");</p>
+<p class="p1"><span class="Apple-converted-space">  </span>ctx.imageSmoothingEnabled = false;</p>
+<p class="p1"><span class="Apple-converted-space">  </span>ctx.font = "12px monospace";</p>
+<p class="p1"><span class="Apple-converted-space">  </span>ctx.textBaseline = "alphabetic";</p>
+<p class="p1"><span class="Apple-converted-space">  </span>const W = canvas.width, H = canvas.height;</p>
+<p class="p2"><br></p>
+<p class="p1"><span class="Apple-converted-space">  </span>/* =======================</p>
+<p class="p1"><span class="Apple-converted-space">     </span>ASSETS (plats)</p>
+<p class="p1"><span class="Apple-converted-space">  </span>======================= */</p>
+<p class="p1"><span class="Apple-converted-space">  </span>const ASSETS = {</p>
+<p class="p1"><span class="Apple-converted-space">    </span>sprites: {</p>
+<p class="p1"><span class="Apple-converted-space">      </span>remy_back: "remy_back.png",</p>
+<p class="p1"><span class="Apple-converted-space">      </span>wauquiez_front: "wauquiez_front.png",</p>
+<p class="p1"><span class="Apple-converted-space">      </span>ciotti_front: "ciotti_front.png",</p>
+<p class="p1"><span class="Apple-converted-space">      </span>maite_front: "maite_front.png",</p>
+<p class="p1"><span class="Apple-converted-space">      </span>edile_front: "edile_front.png"</p>
+<p class="p1"><span class="Apple-converted-space">    </span>},</p>
+<p class="p1"><span class="Apple-converted-space">    </span>background: { battle: "battle_bg.png" },</p>
+<p class="p1"><span class="Apple-converted-space">    </span>ui: { cursor: "cursor.png", textbox: "textbox.png" }</p>
+<p class="p1"><span class="Apple-converted-space">  </span>};</p>
+<p class="p2"><br></p>
+<p class="p1"><span class="Apple-converted-space">  </span>const IMG = {};</p>
+<p class="p1"><span class="Apple-converted-space">  </span>function preloadAssets(done) {</p>
+<p class="p1"><span class="Apple-converted-space">    </span>const entries = [];</p>
+<p class="p1"><span class="Apple-converted-space">    </span>for (const k in ASSETS.sprites) entries.push([k, ASSETS.sprites[k]]);</p>
+<p class="p1"><span class="Apple-converted-space">    </span>for (const k in ASSETS.background) entries.push([k, ASSETS.background[k]]);</p>
+<p class="p1"><span class="Apple-converted-space">    </span>for (const k in ASSETS.ui) entries.push([k, ASSETS.ui[k]]);</p>
+<p class="p1"><span class="Apple-converted-space">    </span>let loaded = 0;</p>
+<p class="p1"><span class="Apple-converted-space">    </span>const total = entries.length;</p>
+<p class="p1"><span class="Apple-converted-space">    </span>if (total === 0) return done();</p>
+<p class="p2"><br></p>
+<p class="p1"><span class="Apple-converted-space">    </span>entries.forEach(([key, src]) =&gt; {</p>
+<p class="p1"><span class="Apple-converted-space">      </span>const img = new Image();</p>
+<p class="p1"><span class="Apple-converted-space">      </span>img.onload = () =&gt; { IMG[key] = img; if (++loaded === total) done(); };</p>
+<p class="p1"><span class="Apple-converted-space">      </span>img.onerror = () =&gt; { console.warn("Asset manquant :", src); if (++loaded === total) done(); };</p>
+<p class="p1"><span class="Apple-converted-space">      </span>img.src = src;</p>
+<p class="p1"><span class="Apple-converted-space">    </span>});</p>
+<p class="p1"><span class="Apple-converted-space">  </span>}</p>
+<p class="p2"><br></p>
+<p class="p1"><span class="Apple-converted-space">  </span>/* =======================</p>
+<p class="p1"><span class="Apple-converted-space">     </span>UTILS</p>
+<p class="p1"><span class="Apple-converted-space">  </span>======================= */</p>
+<p class="p1"><span class="Apple-converted-space">  </span>const clamp = (v,a,b)=&gt;Math.max(a,Math.min(b,v));</p>
+<p class="p1"><span class="Apple-converted-space">  </span>const chance = p =&gt; Math.random() &lt; p;</p>
+<p class="p1"><span class="Apple-converted-space">  </span>const randInt = (a,b)=&gt;Math.floor(Math.random()*(b-a+1))+a;</p>
+<p class="p2"><br></p>
+<p class="p1"><span class="Apple-converted-space">  </span>/* =======================</p>
+<p class="p1"><span class="Apple-converted-space">     </span>FX Gen-1 (shake/flash/overlays)</p>
+<p class="p1"><span class="Apple-converted-space">  </span>======================= */</p>
+<p class="p1"><span class="Apple-converted-space">  </span>const FX = {</p>
+<p class="p1"><span class="Apple-converted-space">    </span>shakeX:0, shakeY:0, shakeFrames:0,</p>
+<p class="p1"><span class="Apple-converted-space">    </span>flashFrames:0,</p>
+<p class="p1"><span class="Apple-converted-space">    </span>overlay:null, // {kind,x,y,frames,t}</p>
+<p class="p1"><span class="Apple-converted-space">    </span>floatText:null // {text,x,y,frames}</p>
+<p class="p1"><span class="Apple-converted-space">  </span>};</p>
+<p class="p2"><br></p>
+<p class="p1"><span class="Apple-converted-space">  </span>function startShake(kind){ FX.shakeFrames = (kind==="physical") ? 6 : 8; }</p>
+<p class="p1"><span class="Apple-converted-space">  </span>function criticalFlash(){ FX.flashFrames = 2; }</p>
+<p class="p1"><span class="Apple-converted-space">  </span>function setOverlay(kind,x,y,frames=18){ FX.overlay = {kind,x,y,frames,t:0}; }</p>
+<p class="p2"><br></p>
+<p class="p1"><span class="Apple-converted-space">  </span>function updateFX(){</p>
+<p class="p1"><span class="Apple-converted-space">    </span>if(FX.shakeFrames&gt;0){</p>
+<p class="p1"><span class="Apple-converted-space">      </span>FX.shakeX = (Math.random()-0.5)*6;</p>
+<p class="p1"><span class="Apple-converted-space">      </span>FX.shakeY = (Math.random()-0.5)*4;</p>
+<p class="p1"><span class="Apple-converted-space">      </span>FX.shakeFrames--;</p>
+<p class="p1"><span class="Apple-converted-space">    </span>} else { FX.shakeX=FX.shakeY=0; }</p>
+<p class="p1"><span class="Apple-converted-space">    </span>if(FX.flashFrames&gt;0) FX.flashFrames--;</p>
+<p class="p1"><span class="Apple-converted-space">    </span>if(FX.overlay){</p>
+<p class="p1"><span class="Apple-converted-space">      </span>FX.overlay.t++; FX.overlay.frames--;</p>
+<p class="p1"><span class="Apple-converted-space">      </span>if(FX.overlay.frames&lt;=0) FX.overlay=null;</p>
+<p class="p1"><span class="Apple-converted-space">    </span>}</p>
+<p class="p1"><span class="Apple-converted-space">    </span>if(FX.floatText){</p>
+<p class="p1"><span class="Apple-converted-space">      </span>FX.floatText.y -= 0.25;</p>
+<p class="p1"><span class="Apple-converted-space">      </span>FX.floatText.frames--;</p>
+<p class="p1"><span class="Apple-converted-space">      </span>if(FX.floatText.frames&lt;=0) FX.floatText=null;</p>
+<p class="p1"><span class="Apple-converted-space">    </span>}</p>
+<p class="p1"><span class="Apple-converted-space">  </span>}</p>
+<p class="p2"><br></p>
+<p class="p1"><span class="Apple-converted-space">  </span>/* =======================</p>
+<p class="p1"><span class="Apple-converted-space">     </span>UI Gen-1 (textbox + menus + curseur)</p>
+<p class="p1"><span class="Apple-converted-space">  </span>======================= */</p>
+<p class="p1"><span class="Apple-converted-space">  </span>const UI = {</p>
+<p class="p1"><span class="Apple-converted-space">    </span>text:"",</p>
+<p class="p1"><span class="Apple-converted-space">    </span>visible:"",</p>
+<p class="p1"><span class="Apple-converted-space">    </span>idx:0,</p>
+<p class="p1"><span class="Apple-converted-space">    </span>typing:false,</p>
+<p class="p1"><span class="Apple-converted-space">    </span>typeDelay:30,</p>
+<p class="p1"><span class="Apple-converted-space">    </span>typeT:0,</p>
+<p class="p1"><span class="Apple-converted-space">    </span>queue:[],</p>
+<p class="p1"><span class="Apple-converted-space">    </span>menu:false,</p>
+<p class="p1"><span class="Apple-converted-space">    </span>menuItems:[],</p>
+<p class="p1"><span class="Apple-converted-space">    </span>menuIdx:0,</p>
+<p class="p1"><span class="Apple-converted-space">    </span>blinkT:0,</p>
+<p class="p1"><span class="Apple-converted-space">    </span>inputCooldown:0</p>
+<p class="p1"><span class="Apple-converted-space">  </span>};</p>
+<p class="p2"><br></p>
+<p class="p1"><span class="Apple-converted-space">  </span>function showText(msg){</p>
+<p class="p1"><span class="Apple-converted-space">    </span>UI.text = msg;</p>
+<p class="p1"><span class="Apple-converted-space">    </span>UI.visible = "";</p>
+<p class="p1"><span class="Apple-converted-space">    </span>UI.idx = 0;</p>
+<p class="p1"><span class="Apple-converted-space">    </span>UI.typing = true;</p>
+<p class="p1"><span class="Apple-converted-space">    </span>UI.typeT = 0;</p>
+<p class="p1"><span class="Apple-converted-space">    </span>UI.menu = false;</p>
+<p class="p1"><span class="Apple-converted-space">  </span>}</p>
+<p class="p1"><span class="Apple-converted-space">  </span>function queueText(msg){ UI.queue.push(msg); }</p>
+<p class="p2"><br></p>
+<p class="p1"><span class="Apple-converted-space">  </span>function finishOrNextText(){</p>
+<p class="p1"><span class="Apple-converted-space">    </span>if(UI.typing &amp;&amp; UI.idx &lt; UI.text.length){</p>
+<p class="p1"><span class="Apple-converted-space">      </span>UI.visible = UI.text;</p>
+<p class="p1"><span class="Apple-converted-space">      </span>UI.idx = UI.text.length;</p>
+<p class="p1"><span class="Apple-converted-space">      </span>UI.typing = false;</p>
+<p class="p1"><span class="Apple-converted-space">      </span>return true;</p>
+<p class="p1"><span class="Apple-converted-space">    </span>}</p>
+<p class="p1"><span class="Apple-converted-space">    </span>if(!UI.typing &amp;&amp; UI.queue.length&gt;0){</p>
+<p class="p1"><span class="Apple-converted-space">      </span>showText(UI.queue.shift());</p>
+<p class="p1"><span class="Apple-converted-space">      </span>return true;</p>
+<p class="p1"><span class="Apple-converted-space">    </span>}</p>
+<p class="p1"><span class="Apple-converted-space">    </span>UI.text=""; UI.visible="";</p>
+<p class="p1"><span class="Apple-converted-space">    </span>return false;</p>
+<p class="p1"><span class="Apple-converted-space">  </span>}</p>
+<p class="p2"><br></p>
+<p class="p1"><span class="Apple-converted-space">  </span>function updateText(dt){</p>
+<p class="p1"><span class="Apple-converted-space">    </span>if(!UI.typing) return;</p>
+<p class="p1"><span class="Apple-converted-space">    </span>UI.typeT += dt;</p>
+<p class="p1"><span class="Apple-converted-space">    </span>while(UI.typeT&gt;=UI.typeDelay &amp;&amp; UI.idx&lt;UI.text.length){</p>
+<p class="p1"><span class="Apple-converted-space">      </span>UI.visible += UI.text[UI.idx++];</p>
+<p class="p1"><span class="Apple-converted-space">      </span>UI.typeT -= UI.typeDelay;</p>
+<p class="p1"><span class="Apple-converted-space">    </span>}</p>
+<p class="p1"><span class="Apple-converted-space">    </span>if(UI.idx&gt;=UI.text.length) UI.typing=false;</p>
+<p class="p1"><span class="Apple-converted-space">  </span>}</p>
+<p class="p2"><br></p>
+<p class="p1"><span class="Apple-converted-space">  </span>function openMenu(items){</p>
+<p class="p1"><span class="Apple-converted-space">    </span>UI.menuItems = items.slice();</p>
+<p class="p1"><span class="Apple-converted-space">    </span>UI.menuIdx = 0;</p>
+<p class="p1"><span class="Apple-converted-space">    </span>UI.menu = true;</p>
+<p class="p1"><span class="Apple-converted-space">  </span>}</p>
+<p class="p2"><br></p>
+<p class="p1"><span class="Apple-converted-space">  </span>/* =======================</p>
+<p class="p1"><span class="Apple-converted-space">     </span>Types &amp; efficacité (verrouillé)</p>
+<p class="p1"><span class="Apple-converted-space">  </span>======================= */</p>
+<p class="p1"><span class="Apple-converted-space">  </span>const typeChart = {</p>
+<p class="p1"><span class="Apple-converted-space">    </span>action: <span class="Apple-converted-space">      </span>{ blague:2, parisianisme:0.5 },</p>
+<p class="p1"><span class="Apple-converted-space">    </span>blague: <span class="Apple-converted-space">      </span>{ parisianisme:2, recherche:0.5 },</p>
+<p class="p1"><span class="Apple-converted-space">    </span>recherche:<span class="Apple-converted-space">    </span>{ blague:2, parisianisme:0.5 },</p>
+<p class="p1"><span class="Apple-converted-space">    </span>parisianisme: { action:2, tradition:0.5 },</p>
+<p class="p1"><span class="Apple-converted-space">    </span>tradition:<span class="Apple-converted-space">    </span>{ parisianisme:2, recherche:0.5 }</p>
+<p class="p1"><span class="Apple-converted-space">  </span>};</p>
+<p class="p2"><br></p>
+<p class="p1"><span class="Apple-converted-space">  </span>function typeMultiplier(attackType, defenderTypes){</p>
+<p class="p1"><span class="Apple-converted-space">    </span>let m = 1;</p>
+<p class="p1"><span class="Apple-converted-space">    </span>defenderTypes.forEach(t=&gt;{</p>
+<p class="p1"><span class="Apple-converted-space">      </span>const v = typeChart[attackType]?.[t];</p>
+<p class="p1"><span class="Apple-converted-space">      </span>if(v) m *= v;</p>
+<p class="p1"><span class="Apple-converted-space">    </span>});</p>
+<p class="p1"><span class="Apple-converted-space">    </span>return m;</p>
+<p class="p1"><span class="Apple-converted-space">  </span>}</p>
+<p class="p2"><br></p>
+<p class="p1"><span class="Apple-converted-space">  </span>/* =======================</p>
+<p class="p1"><span class="Apple-converted-space">     </span>Fighters &amp; stats (100 HP reset)</p>
+<p class="p1"><span class="Apple-converted-space">  </span>======================= */</p>
+<p class="p1"><span class="Apple-converted-space">  </span>function createFighter(name, types, stats, spriteKey){</p>
+<p class="p1"><span class="Apple-converted-space">    </span>return {</p>
+<p class="p1"><span class="Apple-converted-space">      </span>name, types, spriteKey,</p>
+<p class="p1"><span class="Apple-converted-space">      </span>maxHP:100, hp:100,</p>
+<p class="p1"><span class="Apple-converted-space">      </span>base:{...stats},</p>
+<p class="p1"><span class="Apple-converted-space">      </span>mods:{atk:0, def:0, sp:0, spd:0},</p>
+<p class="p1"><span class="Apple-converted-space">      </span>status:{ burn:false, sleep:0, confusion:0, protected:0 },</p>
+<p class="p1"><span class="Apple-converted-space">      </span>moves:[],</p>
+<p class="p1"><span class="Apple-converted-space">      </span>aiProfile:null</p>
+<p class="p1"><span class="Apple-converted-space">    </span>};</p>
+<p class="p1"><span class="Apple-converted-space">  </span>}</p>
+<p class="p2"><br></p>
+<p class="p1"><span class="Apple-converted-space">  </span>function stageMultiplier(stage){</p>
+<p class="p1"><span class="Apple-converted-space">    </span>const s = clamp(stage, -6, 6);</p>
+<p class="p1"><span class="Apple-converted-space">    </span>if(s&gt;=0) return 1 + s*0.15;</p>
+<p class="p1"><span class="Apple-converted-space">    </span>return 1 + s*0.10;</p>
+<p class="p1"><span class="Apple-converted-space">  </span>}</p>
+<p class="p2"><br></p>
+<p class="p1"><span class="Apple-converted-space">  </span>function effectiveStat(f,key){</p>
+<p class="p1"><span class="Apple-converted-space">    </span>const base = f.base[key];</p>
+<p class="p1"><span class="Apple-converted-space">    </span>const mult = stageMultiplier(f.mods[key] || 0);</p>
+<p class="p1"><span class="Apple-converted-space">    </span>let v = Math.floor(base * mult);</p>
+<p class="p1"><span class="Apple-converted-space">    </span>if(key==="atk" &amp;&amp; f.status.burn) v = Math.floor(v * 0.5);</p>
+<p class="p1"><span class="Apple-converted-space">    </span>return Math.max(1, v);</p>
+<p class="p1"><span class="Apple-converted-space">  </span>}</p>
+<p class="p2"><br></p>
+<p class="p1"><span class="Apple-converted-space">  </span>function resetBetweenFights(f){</p>
+<p class="p1"><span class="Apple-converted-space">    </span>f.hp = f.maxHP;</p>
+<p class="p1"><span class="Apple-converted-space">    </span>f.mods = {atk:0, def:0, sp:0, spd:0};</p>
+<p class="p1"><span class="Apple-converted-space">    </span>f.status = { burn:false, sleep:0, confusion:0, protected:0 };</p>
+<p class="p1"><span class="Apple-converted-space">  </span>}</p>
+<p class="p2"><br></p>
+<p class="p1"><span class="Apple-converted-space">  </span>/* =======================</p>
+<p class="p1"><span class="Apple-converted-space">     </span>Moves (toutes + effets)</p>
+<p class="p1"><span class="Apple-converted-space">  </span>======================= */</p>
+<p class="p1"><span class="Apple-converted-space">  </span>const remyMoves = [</p>
+<p class="p1"><span class="Apple-converted-space">    </span>{ name:"Cahier de recherche", type:"recherche", category:"special", power:28, accuracy:0.95, effects:[{type:"damage"}] },</p>
+<p class="p1"><span class="Apple-converted-space">    </span>{ name:"Plaidoyer", type:"action", category:"status", power:0, accuracy:1.0, effects:[</p>
+<p class="p1"><span class="Apple-converted-space">      </span>{type:"stat", target:"defender", stat:"def", value:-1},</p>
+<p class="p1"><span class="Apple-converted-space">      </span>{type:"confusion", target:"defender", chance:0.30}</p>
+<p class="p1"><span class="Apple-converted-space">    </span>]},</p>
+<p class="p1"><span class="Apple-converted-space">    </span>{ name:"Bourrée auvergnate", type:"tradition", category:"special", power:36, accuracy:0.90, effects:[{type:"damage"}] },</p>
+<p class="p1"><span class="Apple-converted-space">    </span>{ name:"Second degré", type:"blague", category:"physical", power:22, accuracy:0.95, effects:[</p>
+<p class="p1"><span class="Apple-converted-space">      </span>{type:"damage"},</p>
+<p class="p1"><span class="Apple-converted-space">      </span>{type:"burn", target:"defender", chance:0.20}</p>
+<p class="p1"><span class="Apple-converted-space">    </span>]}</p>
+<p class="p1"><span class="Apple-converted-space">  </span>];</p>
+<p class="p2"><br></p>
+<p class="p1"><span class="Apple-converted-space">  </span>const wauquiezMoves = [</p>
+<p class="p1"><span class="Apple-converted-space">    </span>{ name:"Ce que les français veulent", type:"parisianisme", category:"status", power:0, accuracy:1.0, effects:[</p>
+<p class="p1"><span class="Apple-converted-space">      </span>{type:"stat", target:"self", stat:"atk", value:+1},</p>
+<p class="p1"><span class="Apple-converted-space">      </span>{type:"stat", target:"self", stat:"sp", value:+1},</p>
+<p class="p1"><span class="Apple-converted-space">      </span>{type:"stat", target:"self", stat:"sp", value:-1}</p>
+<p class="p1"><span class="Apple-converted-space">    </span>]},</p>
+<p class="p1"><span class="Apple-converted-space">    </span>{ name:"Dotations publiques", type:"action", category:"status", power:0, accuracy:0.90, effects:[</p>
+<p class="p1"><span class="Apple-converted-space">      </span>{type:"stat", target:"defender", stat:"def", value:-1},</p>
+<p class="p1"><span class="Apple-converted-space">      </span>{type:"stat", target:"defender", stat:"sp", value:-1},</p>
+<p class="p1"><span class="Apple-converted-space">      </span>{type:"sleep", target:"defender", chance:0.25, turns:2}</p>
+<p class="p1"><span class="Apple-converted-space">    </span>]},</p>
+<p class="p1"><span class="Apple-converted-space">    </span>{ name:"Mauvaise foi", type:"blague", category:"physical", power:26, accuracy:0.95, effects:[{type:"damage"}] },</p>
+<p class="p1"><span class="Apple-converted-space">    </span>{ name:"Bottes en caoutchouc", type:"tradition", category:"special", power:34, accuracy:1.0, effects:[{type:"chaos", selfChance:0.5}] }</p>
+<p class="p1"><span class="Apple-converted-space">  </span>];</p>
+<p class="p2"><br></p>
+<p class="p1"><span class="Apple-converted-space">  </span>const ciottiMoves = [</p>
+<p class="p1"><span class="Apple-converted-space">    </span>{ name:"Chauvinisme", type:"parisianisme", category:"status", power:0, accuracy:1.0, effects:[{type:"stat", target:"self", stat:"def", value:+1}] },</p>
+<p class="p1"><span class="Apple-converted-space">    </span>{ name:"Accent chantant", type:"tradition", category:"physical", power:24, accuracy:0.95, effects:[{type:"damage"}] },</p>
+<p class="p1"><span class="Apple-converted-space">    </span>{ name:"Retranchement dans le bureau", type:"parisianisme", category:"status", power:0, accuracy:1.0, effects:[{type:"protect", target:"self", turns:2}] },</p>
+<p class="p1"><span class="Apple-converted-space">    </span>{ name:"UDR", type:"blague", category:"physical", power:0, accuracy:1.0, effects:[{type:"noop"}] }</p>
+<p class="p1"><span class="Apple-converted-space">  </span>];</p>
+<p class="p2"><br></p>
+<p class="p1"><span class="Apple-converted-space">  </span>const maiteMoves = [</p>
+<p class="p1"><span class="Apple-converted-space">    </span>{ name:"Ortolan", type:"tradition", category:"status", power:0, accuracy:1.0, effects:[{type:"heal", target:"self", value:20}] },</p>
+<p class="p1"><span class="Apple-converted-space">    </span>{ name:"Aiguille", type:"tradition", category:"special", power:30, accuracy:0.90, effects:[</p>
+<p class="p1"><span class="Apple-converted-space">      </span>{type:"damage"},</p>
+<p class="p1"><span class="Apple-converted-space">      </span>{type:"stat", target:"self", stat:"atk", value:+1},</p>
+<p class="p1"><span class="Apple-converted-space">      </span>{type:"stat", target:"self", stat:"sp", value:+1},</p>
+<p class="p1"><span class="Apple-converted-space">      </span>{type:"confusion", target:"self", chance:0.15},</p>
+<p class="p1"><span class="Apple-converted-space">      </span>{type:"confusion", target:"defender", chance:0.30}</p>
+<p class="p1"><span class="Apple-converted-space">    </span>]},</p>
+<p class="p1"><span class="Apple-converted-space">    </span>{ name:"Icône", type:"blague", category:"status", power:0, accuracy:1.0, effects:[{type:"stat", target:"self", stat:"sp", value:+1}] },</p>
+<p class="p1"><span class="Apple-converted-space">    </span>{ name:"Indigestion", type:"tradition", category:"special", power:40, accuracy:0.85, effects:[</p>
+<p class="p1"><span class="Apple-converted-space">      </span>{type:"damage"},</p>
+<p class="p1"><span class="Apple-converted-space">      </span>{type:"sleep", target:"self", chance:1.0, turns:2}</p>
+<p class="p1"><span class="Apple-converted-space">    </span>]}</p>
+<p class="p1"><span class="Apple-converted-space">  </span>];</p>
+<p class="p2"><br></p>
+<p class="p1"><span class="Apple-converted-space">  </span>const edileMoves = [</p>
+<p class="p1"><span class="Apple-converted-space">    </span>{ name:"Conseil municipal", type:"action", category:"status", power:0, accuracy:1.0, effects:[</p>
+<p class="p1"><span class="Apple-converted-space">      </span>{type:"stat", target:"self", stat:"sp", value:+1},</p>
+<p class="p1"><span class="Apple-converted-space">      </span>{type:"stat", target:"self", stat:"def", value:+1}</p>
+<p class="p1"><span class="Apple-converted-space">    </span>]},</p>
+<p class="p1"><span class="Apple-converted-space">    </span>{ name:"Clientélisme", type:"action", category:"special", power:18, accuracy:0.95, effects:[</p>
+<p class="p1"><span class="Apple-converted-space">      </span>{type:"damage"},</p>
+<p class="p1"><span class="Apple-converted-space">      </span>{type:"stat", target:"self", stat:"sp", value:+1},</p>
+<p class="p1"><span class="Apple-converted-space">      </span>{type:"stat", target:"self", stat:"def", value:+1}</p>
+<p class="p1"><span class="Apple-converted-space">    </span>]},</p>
+<p class="p1"><span class="Apple-converted-space">    </span>{ name:"Monsieur le maire", type:"action", category:"status", power:0, accuracy:1.0, effects:[{type:"stat", target:"self", stat:"sp", value:+1}] },</p>
+<p class="p1"><span class="Apple-converted-space">    </span>{ name:"Bon sens paysan", type:"tradition", category:"special", power:26, accuracy:0.90, effects:[</p>
+<p class="p1"><span class="Apple-converted-space">      </span>{type:"damage"},</p>
+<p class="p1"><span class="Apple-converted-space">      </span>{type:"confusion", target:"defender", chance:0.25}</p>
+<p class="p1"><span class="Apple-converted-space">    </span>]}</p>
+<p class="p1"><span class="Apple-converted-space">  </span>];</p>
+<p class="p2"><br></p>
+<p class="p1"><span class="Apple-converted-space">  </span>/* =======================</p>
+<p class="p1"><span class="Apple-converted-space">     </span>Stats &amp; campagne (4 combats + fin)</p>
+<p class="p1"><span class="Apple-converted-space">  </span>======================= */</p>
+<p class="p1"><span class="Apple-converted-space">  </span>const HERO_STATS = { atk:55, def:50, sp:65, spd:60 };</p>
+<p class="p1"><span class="Apple-converted-space">  </span>const ENEMY_STATS = {</p>
+<p class="p1"><span class="Apple-converted-space">    </span>"Laurent Wauquiez": { atk:70, def:45, sp:55, spd:50 },</p>
+<p class="p1"><span class="Apple-converted-space">    </span>"Eric Ciotti":<span class="Apple-converted-space">      </span>{ atk:45, def:70, sp:40, spd:55 },</p>
+<p class="p1"><span class="Apple-converted-space">    </span>"Maïté":<span class="Apple-converted-space">            </span>{ atk:65, def:55, sp:60, spd:35 },</p>
+<p class="p1"><span class="Apple-converted-space">    </span>"L’Édile":<span class="Apple-converted-space">          </span>{ atk:50, def:60, sp:70, spd:40 }</p>
+<p class="p1"><span class="Apple-converted-space">  </span>};</p>
+<p class="p2"><br></p>
+<p class="p1"><span class="Apple-converted-space">  </span>const campaign = [</p>
+<p class="p1"><span class="Apple-converted-space">    </span>{ name:"Laurent Wauquiez", types:["parisianisme"], sprite:"wauquiez_front", profile:"wauquiez", moves: wauquiezMoves,</p>
+<p class="p1"><span class="Apple-converted-space">      </span>quote:"Moi, je connais les territoires Rémy." },</p>
+<p class="p1"><span class="Apple-converted-space">    </span>{ name:"Eric Ciotti", types:["blague"], sprite:"ciotti_front", profile:"ciotti", moves: ciottiMoves,</p>
+<p class="p1"><span class="Apple-converted-space">      </span>quote:"C'est quand il y en a beaucoup que ça pose des problèmes et tu es déjà de trop, Rémy." },</p>
+<p class="p1"><span class="Apple-converted-space">    </span>{ name:"Maïté", types:["tradition"], sprite:"maite_front", profile:"maite", moves: maiteMoves,</p>
+<p class="p1"><span class="Apple-converted-space">      </span>quote:"Miam miam." },</p>
+<p class="p1"><span class="Apple-converted-space">    </span>{ name:"L’Édile", types:["action"], sprite:"edile_front", profile:"edile", moves: edileMoves,</p>
+<p class="p1"><span class="Apple-converted-space">      </span>quote:"Brioude ne sera jamais autrement." }</p>
+<p class="p1"><span class="Apple-converted-space">  </span>];</p>
+<p class="p2"><br></p>
+<p class="p1"><span class="Apple-converted-space">  </span>/* =======================</p>
+<p class="p1"><span class="Apple-converted-space">     </span>IA crédible</p>
+<p class="p1"><span class="Apple-converted-space">  </span>======================= */</p>
+<p class="p1"><span class="Apple-converted-space">  </span>const AI_PROFILES = {</p>
+<p class="p1"><span class="Apple-converted-space">    </span>wauquiez: { aggression:0.6, control:0.3, ego:0.8 },</p>
+<p class="p1"><span class="Apple-converted-space">    </span>ciotti: <span class="Apple-converted-space">  </span>{ aggression:0.4, control:0.6, ego:0.9 },</p>
+<p class="p1"><span class="Apple-converted-space">    </span>maite:<span class="Apple-converted-space">    </span>{ aggression:0.7, control:0.2, ego:0.4 },</p>
+<p class="p1"><span class="Apple-converted-space">    </span>edile:<span class="Apple-converted-space">    </span>{ aggression:0.3, control:0.8, ego:0.6 }</p>
+<p class="p1"><span class="Apple-converted-space">  </span>};</p>
+<p class="p2"><br></p>
+<p class="p1"><span class="Apple-converted-space">  </span>function analyzeState(self, opp){</p>
+<p class="p1"><span class="Apple-converted-space">    </span>return {</p>
+<p class="p1"><span class="Apple-converted-space">      </span>lowHP: self.hp &lt; 30,</p>
+<p class="p1"><span class="Apple-converted-space">      </span>oppLowHP: opp.hp &lt; 30,</p>
+<p class="p1"><span class="Apple-converted-space">      </span>oppAsleep: opp.status.sleep &gt; 0,</p>
+<p class="p1"><span class="Apple-converted-space">      </span>oppConfused: opp.status.confusion &gt; 0</p>
+<p class="p1"><span class="Apple-converted-space">    </span>};</p>
+<p class="p1"><span class="Apple-converted-space">  </span>}</p>
+<p class="p2"><br></p>
+<p class="p1"><span class="Apple-converted-space">  </span>function scoreMove(move, self, opp, prof, st){</p>
+<p class="p1"><span class="Apple-converted-space">    </span>let s = Math.random();</p>
+<p class="p2"><br></p>
+<p class="p1"><span class="Apple-converted-space">    </span>if(move.effects.some(e=&gt;e.type==="protect") &amp;&amp; self.status.protected&gt;0) s -= 2;</p>
+<p class="p2"><br></p>
+<p class="p1"><span class="Apple-converted-space">    </span>if(move.power&gt;0){</p>
+<p class="p1"><span class="Apple-converted-space">      </span>s += prof.aggression * (move.power/40);</p>
+<p class="p1"><span class="Apple-converted-space">      </span>const m = typeMultiplier(move.type, opp.types);</p>
+<p class="p1"><span class="Apple-converted-space">      </span>if(m&gt;1) s += 0.8;</p>
+<p class="p1"><span class="Apple-converted-space">      </span>if(m&lt;1) s -= 0.4;</p>
+<p class="p1"><span class="Apple-converted-space">    </span>}</p>
+<p class="p1"><span class="Apple-converted-space">    </span>if(st.oppLowHP &amp;&amp; move.power&gt;=22) s += 1.5;</p>
+<p class="p2"><br></p>
+<p class="p1"><span class="Apple-converted-space">    </span>if(move.effects.some(e=&gt;e.type==="sleep") &amp;&amp; !st.oppAsleep) s += prof.control * 1.2;</p>
+<p class="p1"><span class="Apple-converted-space">    </span>if(move.effects.some(e=&gt;e.type==="confusion") &amp;&amp; !st.oppConfused) s += prof.control;</p>
+<p class="p2"><br></p>
+<p class="p1"><span class="Apple-converted-space">    </span>if(move.effects.some(e=&gt;e.type==="heal") &amp;&amp; st.lowHP) s += 1.8;</p>
+<p class="p1"><span class="Apple-converted-space">    </span>if(move.category==="status" &amp;&amp; !st.lowHP) s += prof.ego * 0.6;</p>
+<p class="p2"><br></p>
+<p class="p1"><span class="Apple-converted-space">    </span>if(move.effects.some(e=&gt;e.type==="noop")) s -= 10;</p>
+<p class="p2"><br></p>
+<p class="p1"><span class="Apple-converted-space">    </span>return s;</p>
+<p class="p1"><span class="Apple-converted-space">  </span>}</p>
+<p class="p2"><br></p>
+<p class="p1"><span class="Apple-converted-space">  </span>function chooseEnemyMove(enemy, player){</p>
+<p class="p1"><span class="Apple-converted-space">    </span>const prof = AI_PROFILES[enemy.aiProfile] || {aggression:0.5, control:0.5, ego:0.5};</p>
+<p class="p1"><span class="Apple-converted-space">    </span>const st = analyzeState(enemy, player);</p>
+<p class="p2"><br></p>
+<p class="p1"><span class="Apple-converted-space">    </span>// quirks</p>
+<p class="p1"><span class="Apple-converted-space">    </span>if(enemy.name==="Laurent Wauquiez" &amp;&amp; chance(0.18)){</p>
+<p class="p1"><span class="Apple-converted-space">      </span>const m = enemy.moves.find(x=&gt;x.name.includes("français veulent"));</p>
+<p class="p1"><span class="Apple-converted-space">      </span>if(m) return m;</p>
+<p class="p1"><span class="Apple-converted-space">    </span>}</p>
+<p class="p1"><span class="Apple-converted-space">    </span>if(enemy.name==="Eric Ciotti" &amp;&amp; enemy.status.protected===0 &amp;&amp; chance(0.28)){</p>
+<p class="p1"><span class="Apple-converted-space">      </span>const m = enemy.moves.find(x=&gt;x.name.includes("Retranchement"));</p>
+<p class="p1"><span class="Apple-converted-space">      </span>if(m) return m;</p>
+<p class="p1"><span class="Apple-converted-space">    </span>}</p>
+<p class="p1"><span class="Apple-converted-space">    </span>if(enemy.name==="Maïté" &amp;&amp; enemy.hp&lt;50 &amp;&amp; chance(0.55)){</p>
+<p class="p1"><span class="Apple-converted-space">      </span>const m = enemy.moves.find(x=&gt;x.name==="Ortolan");</p>
+<p class="p1"><span class="Apple-converted-space">      </span>if(m) return m;</p>
+<p class="p1"><span class="Apple-converted-space">    </span>}</p>
+<p class="p1"><span class="Apple-converted-space">    </span>if(enemy.name==="L’Édile" &amp;&amp; chance(0.35)){</p>
+<p class="p1"><span class="Apple-converted-space">      </span>const m = enemy.moves.find(x=&gt;x.category==="status");</p>
+<p class="p1"><span class="Apple-converted-space">      </span>if(m) return m;</p>
+<p class="p1"><span class="Apple-converted-space">    </span>}</p>
+<p class="p2"><br></p>
+<p class="p1"><span class="Apple-converted-space">    </span>const scored = enemy.moves.map(m=&gt;({m,s:scoreMove(m,enemy,player,prof,st)})).sort((a,b)=&gt;b.s-a.s);</p>
+<p class="p1"><span class="Apple-converted-space">    </span>if(chance(0.70)) return scored[0].m;</p>
+<p class="p1"><span class="Apple-converted-space">    </span>return scored[randInt(0, Math.min(2, scored.length-1))].m;</p>
+<p class="p1"><span class="Apple-converted-space">  </span>}</p>
+<p class="p2"><br></p>
+<p class="p1"><span class="Apple-converted-space">  </span>/* =======================</p>
+<p class="p1"><span class="Apple-converted-space">     </span>Combat avancé: précision, crit, dégâts</p>
+<p class="p1"><span class="Apple-converted-space">  </span>======================= */</p>
+<p class="p1"><span class="Apple-converted-space">  </span>function rollAccuracy(move){</p>
+<p class="p1"><span class="Apple-converted-space">    </span>if(chance(1/256)) return false; // Gen-1-ish</p>
+<p class="p1"><span class="Apple-converted-space">    </span>return chance(move.accuracy ?? 1.0);</p>
+<p class="p1"><span class="Apple-converted-space">  </span>}</p>
+<p class="p2"><br></p>
+<p class="p1"><span class="Apple-converted-space">  </span>function rollCrit(attacker){</p>
+<p class="p1"><span class="Apple-converted-space">    </span>const spd = effectiveStat(attacker, "spd");</p>
+<p class="p1"><span class="Apple-converted-space">    </span>const p = clamp(0.06 + (spd/200), 0.06, 0.20);</p>
+<p class="p1"><span class="Apple-converted-space">    </span>return chance(p);</p>
+<p class="p1"><span class="Apple-converted-space">  </span>}</p>
+<p class="p2"><br></p>
+<p class="p1"><span class="Apple-converted-space">  </span>function computeDamage(attacker, defender, move, mult, isCrit){</p>
+<p class="p1"><span class="Apple-converted-space">    </span>const atk = (move.category==="physical") ? effectiveStat(attacker,"atk") : effectiveStat(attacker,"sp");</p>
+<p class="p1"><span class="Apple-converted-space">    </span>const def = (move.category==="physical") ? effectiveStat(defender,"def") : effectiveStat(defender,"sp");</p>
+<p class="p1"><span class="Apple-converted-space">    </span>let dmg = (atk/def) * move.power;</p>
+<p class="p1"><span class="Apple-converted-space">    </span>dmg *= mult;</p>
+<p class="p1"><span class="Apple-converted-space">    </span>dmg *= (Math.random()*0.15 + 0.85);</p>
+<p class="p1"><span class="Apple-converted-space">    </span>if(isCrit) dmg *= 1.95;</p>
+<p class="p1"><span class="Apple-converted-space">    </span>return Math.max(1, Math.floor(dmg));</p>
+<p class="p1"><span class="Apple-converted-space">  </span>}</p>
+<p class="p2"><br></p>
+<p class="p1"><span class="Apple-converted-space">  </span>/* =======================</p>
+<p class="p1"><span class="Apple-converted-space">     </span>Effets + HP drain</p>
+<p class="p1"><span class="Apple-converted-space">  </span>======================= */</p>
+<p class="p1"><span class="Apple-converted-space">  </span>function applyEffect(effect, attacker, defender, moveCtx){</p>
+<p class="p1"><span class="Apple-converted-space">    </span>const target = (effect.target==="self") ? attacker : defender;</p>
+<p class="p2"><br></p>
+<p class="p1"><span class="Apple-converted-space">    </span>switch(effect.type){</p>
+<p class="p1"><span class="Apple-converted-space">      </span>case "stat":</p>
+<p class="p1"><span class="Apple-converted-space">        </span>target.mods[effect.stat] = clamp((target.mods[effect.stat]||0) + effect.value, -6, 6);</p>
+<p class="p1"><span class="Apple-converted-space">        </span>FX.floatText = { text:`${effect.value&gt;0?"+":""}${effect.value} ${effect.stat.toUpperCase()}`, x:160, y:80, frames:30 };</p>
+<p class="p1"><span class="Apple-converted-space">        </span>return;</p>
+<p class="p2"><br></p>
+<p class="p1"><span class="Apple-converted-space">      </span>case "burn":</p>
+<p class="p1"><span class="Apple-converted-space">        </span>if(!target.status.burn &amp;&amp; chance(effect.chance||0)){</p>
+<p class="p1"><span class="Apple-converted-space">          </span>target.status.burn = true;</p>
+<p class="p1"><span class="Apple-converted-space">          </span>setOverlay("burn", target===player?70:240, target===player?130:70);</p>
+<p class="p1"><span class="Apple-converted-space">        </span>}</p>
+<p class="p1"><span class="Apple-converted-space">        </span>return;</p>
+<p class="p2"><br></p>
+<p class="p1"><span class="Apple-converted-space">      </span>case "sleep":</p>
+<p class="p1"><span class="Apple-converted-space">        </span>if(chance(effect.chance||0)){</p>
+<p class="p1"><span class="Apple-converted-space">          </span>target.status.sleep = effect.turns||2;</p>
+<p class="p1"><span class="Apple-converted-space">          </span>setOverlay("sleep", target===player?70:240, target===player?130:70);</p>
+<p class="p1"><span class="Apple-converted-space">        </span>}</p>
+<p class="p1"><span class="Apple-converted-space">        </span>return;</p>
+<p class="p2"><br></p>
+<p class="p1"><span class="Apple-converted-space">      </span>case "confusion":</p>
+<p class="p1"><span class="Apple-converted-space">        </span>if(chance(effect.chance||0)){</p>
+<p class="p1"><span class="Apple-converted-space">          </span>target.status.confusion = randInt(1,4);</p>
+<p class="p1"><span class="Apple-converted-space">          </span>setOverlay("confusion", target===player?70:240, target===player?130:70);</p>
+<p class="p1"><span class="Apple-converted-space">        </span>}</p>
+<p class="p1"><span class="Apple-converted-space">        </span>return;</p>
+<p class="p2"><br></p>
+<p class="p1"><span class="Apple-converted-space">      </span>case "heal":</p>
+<p class="p1"><span class="Apple-converted-space">        </span>target.hp = Math.min(target.maxHP, target.hp + (effect.value||0));</p>
+<p class="p1"><span class="Apple-converted-space">        </span>FX.floatText = { text:"+SOIN", x:160, y:90, frames:35 };</p>
+<p class="p1"><span class="Apple-converted-space">        </span>setOverlay("heal", target===player?70:240, target===player?130:70);</p>
+<p class="p1"><span class="Apple-converted-space">        </span>return;</p>
+<p class="p2"><br></p>
+<p class="p1"><span class="Apple-converted-space">      </span>case "protect":</p>
+<p class="p1"><span class="Apple-converted-space">        </span>target.status.protected = effect.turns||2;</p>
+<p class="p1"><span class="Apple-converted-space">        </span>setOverlay("protect", target===player?70:240, target===player?130:70);</p>
+<p class="p1"><span class="Apple-converted-space">        </span>return;</p>
+<p class="p2"><br></p>
+<p class="p1"><span class="Apple-converted-space">      </span>case "chaos":</p>
+<p class="p1"><span class="Apple-converted-space">        </span>moveCtx.chaosSelfHit = chance(effect.selfChance ?? 0.5);</p>
+<p class="p1"><span class="Apple-converted-space">        </span>return;</p>
+<p class="p2"><br></p>
+<p class="p1"><span class="Apple-converted-space">      </span>case "noop":</p>
+<p class="p1"><span class="Apple-converted-space">        </span>return;</p>
+<p class="p1"><span class="Apple-converted-space">    </span>}</p>
+<p class="p1"><span class="Apple-converted-space">  </span>}</p>
+<p class="p2"><br></p>
+<p class="p1"><span class="Apple-converted-space">  </span>function drainHPAnimated(target, amount, after){</p>
+<p class="p1"><span class="Apple-converted-space">    </span>amount = Math.max(0, amount|0);</p>
+<p class="p1"><span class="Apple-converted-space">    </span>if(amount===0){ after?.(); return; }</p>
+<p class="p1"><span class="Apple-converted-space">    </span>let left = amount;</p>
+<p class="p1"><span class="Apple-converted-space">    </span>const tickMs = 6;</p>
+<p class="p1"><span class="Apple-converted-space">    </span>const it = setInterval(()=&gt;{</p>
+<p class="p1"><span class="Apple-converted-space">      </span>if(left&lt;=0 || target.hp&lt;=0){</p>
+<p class="p1"><span class="Apple-converted-space">        </span>clearInterval(it);</p>
+<p class="p1"><span class="Apple-converted-space">        </span>after?.();</p>
+<p class="p1"><span class="Apple-converted-space">        </span>return;</p>
+<p class="p1"><span class="Apple-converted-space">      </span>}</p>
+<p class="p1"><span class="Apple-converted-space">      </span>target.hp--;</p>
+<p class="p1"><span class="Apple-converted-space">      </span>left--;</p>
+<p class="p1"><span class="Apple-converted-space">    </span>}, tickMs);</p>
+<p class="p1"><span class="Apple-converted-space">  </span>}</p>
+<p class="p2"><br></p>
+<p class="p1"><span class="Apple-converted-space">  </span>function endTurnStatusTick(f){</p>
+<p class="p1"><span class="Apple-converted-space">    </span>if(f.status.burn){</p>
+<p class="p1"><span class="Apple-converted-space">      </span>const burnDmg = 6;</p>
+<p class="p1"><span class="Apple-converted-space">      </span>f.hp = Math.max(0, f.hp - burnDmg);</p>
+<p class="p1"><span class="Apple-converted-space">      </span>FX.floatText = { text:"-BRÛLURE", x:160, y:92, frames:35 };</p>
+<p class="p1"><span class="Apple-converted-space">      </span>setOverlay("burn", f===player?70:240, f===player?130:70, 18);</p>
+<p class="p1"><span class="Apple-converted-space">    </span>}</p>
+<p class="p1"><span class="Apple-converted-space">    </span>if(f.status.protected&gt;0) f.status.protected--;</p>
+<p class="p1"><span class="Apple-converted-space">  </span>}</p>
+<p class="p2"><br></p>
+<p class="p1"><span class="Apple-converted-space">  </span>function resolveMove(attacker, defender, move){</p>
+<p class="p1"><span class="Apple-converted-space">    </span>// protect blocks only damage</p>
+<p class="p1"><span class="Apple-converted-space">    </span>if(defender.status.protected&gt;0 &amp;&amp; move.power&gt;0){</p>
+<p class="p1"><span class="Apple-converted-space">      </span>queueText("Mais ça n’atteint pas la cible !");</p>
+<p class="p1"><span class="Apple-converted-space">      </span>setOverlay("protect", defender===player?70:240, defender===player?130:70);</p>
+<p class="p1"><span class="Apple-converted-space">      </span>return;</p>
+<p class="p1"><span class="Apple-converted-space">    </span>}</p>
+<p class="p2"><br></p>
+<p class="p1"><span class="Apple-converted-space">    </span>// sleep start of turn</p>
+<p class="p1"><span class="Apple-converted-space">    </span>if(attacker.status.sleep&gt;0){</p>
+<p class="p1"><span class="Apple-converted-space">      </span>attacker.status.sleep--;</p>
+<p class="p1"><span class="Apple-converted-space">      </span>queueText(`${attacker.name} dort...`);</p>
+<p class="p1"><span class="Apple-converted-space">      </span>setOverlay("sleep", attacker===player?70:240, attacker===player?130:70);</p>
+<p class="p1"><span class="Apple-converted-space">      </span>return;</p>
+<p class="p1"><span class="Apple-converted-space">    </span>}</p>
+<p class="p2"><br></p>
+<p class="p1"><span class="Apple-converted-space">    </span>// confusion start of turn</p>
+<p class="p1"><span class="Apple-converted-space">    </span>if(attacker.status.confusion&gt;0){</p>
+<p class="p1"><span class="Apple-converted-space">      </span>attacker.status.confusion--;</p>
+<p class="p1"><span class="Apple-converted-space">      </span>queueText(`${attacker.name} est confus...`);</p>
+<p class="p1"><span class="Apple-converted-space">      </span>setOverlay("confusion", attacker===player?70:240, attacker===player?130:70);</p>
+<p class="p1"><span class="Apple-converted-space">      </span>if(chance(0.5)){</p>
+<p class="p1"><span class="Apple-converted-space">        </span>queueText("Il se blesse dans sa confusion !");</p>
+<p class="p1"><span class="Apple-converted-space">        </span>startShake("physical");</p>
+<p class="p1"><span class="Apple-converted-space">        </span>drainHPAnimated(attacker, Math.min(12, attacker.hp));</p>
+<p class="p1"><span class="Apple-converted-space">        </span>return;</p>
+<p class="p1"><span class="Apple-converted-space">      </span>}</p>
+<p class="p1"><span class="Apple-converted-space">    </span>}</p>
+<p class="p2"><br></p>
+<p class="p1"><span class="Apple-converted-space">    </span>if(!rollAccuracy(move)){</p>
+<p class="p1"><span class="Apple-converted-space">      </span>queueText("Mais ça rate !");</p>
+<p class="p1"><span class="Apple-converted-space">      </span>return;</p>
+<p class="p1"><span class="Apple-converted-space">    </span>}</p>
+<p class="p2"><br></p>
+<p class="p1"><span class="Apple-converted-space">    </span>if(move.category==="physical") startShake("physical");</p>
+<p class="p1"><span class="Apple-converted-space">    </span>else startShake("special");</p>
+<p class="p2"><br></p>
+<p class="p1"><span class="Apple-converted-space">    </span>const isCrit = (move.power&gt;0) ? rollCrit(attacker) : false;</p>
+<p class="p1"><span class="Apple-converted-space">    </span>if(isCrit) criticalFlash();</p>
+<p class="p2"><br></p>
+<p class="p1"><span class="Apple-converted-space">    </span>const moveCtx = { chaosSelfHit:false };</p>
+<p class="p1"><span class="Apple-converted-space">    </span>(move.effects||[]).forEach(e=&gt;{ if(e.type==="chaos") applyEffect(e, attacker, defender, moveCtx); });</p>
+<p class="p2"><br></p>
+<p class="p1"><span class="Apple-converted-space">    </span>if(move.power&gt;0){</p>
+<p class="p1"><span class="Apple-converted-space">      </span>const mult = typeMultiplier(move.type, defender.types);</p>
+<p class="p1"><span class="Apple-converted-space">      </span>const dmg = computeDamage(attacker, defender, move, mult, isCrit);</p>
+<p class="p2"><br></p>
+<p class="p1"><span class="Apple-converted-space">      </span>if(mult&gt;1) queueText("C'est très efficace !");</p>
+<p class="p1"><span class="Apple-converted-space">      </span>if(mult&lt;1) queueText("Ce n'est pas très efficace...");</p>
+<p class="p2"><br></p>
+<p class="p1"><span class="Apple-converted-space">      </span>if(moveCtx.chaosSelfHit){</p>
+<p class="p1"><span class="Apple-converted-space">        </span>queueText("Oups... retour de boue !");</p>
+<p class="p1"><span class="Apple-converted-space">        </span>drainHPAnimated(attacker, Math.min(dmg, attacker.hp));</p>
+<p class="p1"><span class="Apple-converted-space">      </span>} else {</p>
+<p class="p1"><span class="Apple-converted-space">        </span>const chaosBonus = (move.effects||[]).some(e=&gt;e.type==="chaos") ? 2 : 1;</p>
+<p class="p1"><span class="Apple-converted-space">        </span>drainHPAnimated(defender, Math.min(dmg*chaosBonus, defender.hp));</p>
+<p class="p1"><span class="Apple-converted-space">      </span>}</p>
+<p class="p1"><span class="Apple-converted-space">    </span>}</p>
+<p class="p2"><br></p>
+<p class="p1"><span class="Apple-converted-space">    </span>(move.effects||[]).forEach(e=&gt;{</p>
+<p class="p1"><span class="Apple-converted-space">      </span>if(e.type==="damage" || e.type==="chaos") return;</p>
+<p class="p1"><span class="Apple-converted-space">      </span>applyEffect(e, attacker, defender, moveCtx);</p>
+<p class="p1"><span class="Apple-converted-space">    </span>});</p>
+<p class="p1"><span class="Apple-converted-space">  </span>}</p>
+<p class="p2"><br></p>
+<p class="p1"><span class="Apple-converted-space">  </span>function computeOrder(p,e){</p>
+<p class="p1"><span class="Apple-converted-space">    </span>const ps = effectiveStat(p,"spd");</p>
+<p class="p1"><span class="Apple-converted-space">    </span>const es = effectiveStat(e,"spd");</p>
+<p class="p1"><span class="Apple-converted-space">    </span>if(ps===es) return chance(0.5) ? ["player","enemy"] : ["enemy","player"];</p>
+<p class="p1"><span class="Apple-converted-space">    </span>return (ps&gt;es) ? ["player","enemy"] : ["enemy","player"];</p>
+<p class="p1"><span class="Apple-converted-space">  </span>}</p>
+<p class="p2"><br></p>
+<p class="p1"><span class="Apple-converted-space">  </span>/* =======================</p>
+<p class="p1"><span class="Apple-converted-space">     </span>Game state + campagne</p>
+<p class="p1"><span class="Apple-converted-space">  </span>======================= */</p>
+<p class="p1"><span class="Apple-converted-space">  </span>let gameState = "TITLE"; // TITLE, FIGHT, LOST, ENDING_PENDING, ENDING</p>
+<p class="p1"><span class="Apple-converted-space">  </span>let phase = "WAIT";<span class="Apple-converted-space">      </span>// PLAYER_MENU, PLAYER_MOVES, RESOLVE</p>
+<p class="p1"><span class="Apple-converted-space">  </span>let fightIndex = 0;</p>
+<p class="p2"><br></p>
+<p class="p1"><span class="Apple-converted-space">  </span>const player = createFighter("Rémy", ["recherche","blague"], HERO_STATS, "remy_back");</p>
+<p class="p1"><span class="Apple-converted-space">  </span>player.moves = remyMoves;</p>
+<p class="p2"><br></p>
+<p class="p1"><span class="Apple-converted-space">  </span>let enemy = null;</p>
+<p class="p2"><br></p>
+<p class="p1"><span class="Apple-converted-space">  </span>function startTitle(){</p>
+<p class="p1"><span class="Apple-converted-space">    </span>gameState="TITLE";</p>
+<p class="p1"><span class="Apple-converted-space">    </span>phase="WAIT";</p>
+<p class="p1"><span class="Apple-converted-space">    </span>UI.queue=[];</p>
+<p class="p1"><span class="Apple-converted-space">    </span>showText("BRIOUDE 2026\nA TALE OF AURA\n\nJeu satirique.\nRessemblance volontaire\net caricaturale.\n\nAppuyez sur Entrée");</p>
+<p class="p1"><span class="Apple-converted-space">  </span>}</p>
+<p class="p2"><br></p>
+<p class="p1"><span class="Apple-converted-space">  </span>function startFight(i){</p>
+<p class="p1"><span class="Apple-converted-space">    </span>fightIndex = i;</p>
+<p class="p1"><span class="Apple-converted-space">    </span>const d = campaign[i];</p>
+<p class="p1"><span class="Apple-converted-space">    </span>enemy = createFighter(d.name, d.types, ENEMY_STATS[d.name], d.sprite);</p>
+<p class="p1"><span class="Apple-converted-space">    </span>enemy.moves = d.moves;</p>
+<p class="p1"><span class="Apple-converted-space">    </span>enemy.aiProfile = d.profile;</p>
+<p class="p2"><br></p>
+<p class="p1"><span class="Apple-converted-space">    </span>resetBetweenFights(player);</p>
+<p class="p1"><span class="Apple-converted-space">    </span>resetBetweenFights(enemy);</p>
+<p class="p2"><br></p>
+<p class="p1"><span class="Apple-converted-space">    </span>phase="WAIT";</p>
+<p class="p1"><span class="Apple-converted-space">    </span>showText("Un adversaire politique apparaît !");</p>
+<p class="p1"><span class="Apple-converted-space">    </span>queueText(`${enemy.name} entre en scène !`);</p>
+<p class="p1"><span class="Apple-converted-space">    </span>queueText("Choisis une action.");</p>
+<p class="p1"><span class="Apple-converted-space">  </span>}</p>
+<p class="p2"><br></p>
+<p class="p1"><span class="Apple-converted-space">  </span>function startEnding(){</p>
+<p class="p1"><span class="Apple-converted-space">    </span>gameState="ENDING";</p>
+<p class="p1"><span class="Apple-converted-space">    </span>phase="WAIT";</p>
+<p class="p1"><span class="Apple-converted-space">    </span>UI.queue=[];</p>
+<p class="p1"><span class="Apple-converted-space">    </span>showText("Bravo.\n\nTu as remporté tous les débats.\n\nMaintenant,\nil est temps de\nMAKE BRIOUDE GREAT AGAIN !");</p>
+<p class="p1"><span class="Apple-converted-space">  </span>}</p>
+<p class="p2"><br></p>
+<p class="p1"><span class="Apple-converted-space">  </span>function checkEndFight(){</p>
+<p class="p1"><span class="Apple-converted-space">    </span>if(enemy &amp;&amp; enemy.hp&lt;=0){</p>
+<p class="p1"><span class="Apple-converted-space">      </span>UI.menu=false;</p>
+<p class="p1"><span class="Apple-converted-space">      </span>showText(`${enemy.name} est hors débat !`);</p>
+<p class="p1"><span class="Apple-converted-space">      </span>queueText(campaign[fightIndex].quote);</p>
+<p class="p2"><br></p>
+<p class="p1"><span class="Apple-converted-space">      </span>const next = fightIndex + 1;</p>
+<p class="p1"><span class="Apple-converted-space">      </span>if(next &lt; campaign.length){</p>
+<p class="p1"><span class="Apple-converted-space">        </span>queueText("Appuyez sur Entrée.");</p>
+<p class="p1"><span class="Apple-converted-space">      </span>} else {</p>
+<p class="p1"><span class="Apple-converted-space">        </span>queueText("Appuyez sur Entrée.");</p>
+<p class="p1"><span class="Apple-converted-space">        </span>gameState="ENDING_PENDING";</p>
+<p class="p1"><span class="Apple-converted-space">      </span>}</p>
+<p class="p1"><span class="Apple-converted-space">      </span>return true;</p>
+<p class="p1"><span class="Apple-converted-space">    </span>}</p>
+<p class="p1"><span class="Apple-converted-space">    </span>if(player.hp&lt;=0){</p>
+<p class="p1"><span class="Apple-converted-space">      </span>UI.menu=false;</p>
+<p class="p1"><span class="Apple-converted-space">      </span>showText("Rémy est à court d’arguments...");</p>
+<p class="p1"><span class="Apple-converted-space">      </span>queueText("Le débat est perdu.");</p>
+<p class="p1"><span class="Apple-converted-space">      </span>queueText("Appuyez sur Entrée.");</p>
+<p class="p1"><span class="Apple-converted-space">      </span>gameState="LOST";</p>
+<p class="p1"><span class="Apple-converted-space">      </span>return true;</p>
+<p class="p1"><span class="Apple-converted-space">    </span>}</p>
+<p class="p1"><span class="Apple-converted-space">    </span>return false;</p>
+<p class="p1"><span class="Apple-converted-space">  </span>}</p>
+<p class="p2"><br></p>
+<p class="p1"><span class="Apple-converted-space">  </span>/* =======================</p>
+<p class="p1"><span class="Apple-converted-space">     </span>Turn orchestration</p>
+<p class="p1"><span class="Apple-converted-space">  </span>======================= */</p>
+<p class="p1"><span class="Apple-converted-space">  </span>const ACTIONS = [];</p>
+<p class="p1"><span class="Apple-converted-space">  </span>function pushAction(fn, delayMs=0){ ACTIONS.push({fn, delayMs, t:0}); }</p>
+<p class="p1"><span class="Apple-converted-space">  </span>function updateActions(dt){</p>
+<p class="p1"><span class="Apple-converted-space">    </span>if(ACTIONS.length===0) return;</p>
+<p class="p1"><span class="Apple-converted-space">    </span>const a = ACTIONS[0];</p>
+<p class="p1"><span class="Apple-converted-space">    </span>a.t += dt;</p>
+<p class="p1"><span class="Apple-converted-space">    </span>if(a.t &gt;= a.delayMs){</p>
+<p class="p1"><span class="Apple-converted-space">      </span>ACTIONS.shift();</p>
+<p class="p1"><span class="Apple-converted-space">      </span>a.fn();</p>
+<p class="p1"><span class="Apple-converted-space">    </span>}</p>
+<p class="p1"><span class="Apple-converted-space">  </span>}</p>
+<p class="p2"><br></p>
+<p class="p1"><span class="Apple-converted-space">  </span>function playerChooseMove(idx){</p>
+<p class="p1"><span class="Apple-converted-space">    </span>const pMove = player.moves[idx];</p>
+<p class="p1"><span class="Apple-converted-space">    </span>UI.menu=false;</p>
+<p class="p2"><br></p>
+<p class="p1"><span class="Apple-converted-space">    </span>showText(`${player.name} utilise ${pMove.name} !`);</p>
+<p class="p1"><span class="Apple-converted-space">    </span>const eMove = chooseEnemyMove(enemy, player);</p>
+<p class="p1"><span class="Apple-converted-space">    </span>const order = computeOrder(player, enemy);</p>
+<p class="p2"><br></p>
+<p class="p1"><span class="Apple-converted-space">    </span>pushAction(() =&gt; {</p>
+<p class="p1"><span class="Apple-converted-space">      </span>const first = order[0], second = order[1];</p>
+<p class="p2"><br></p>
+<p class="p1"><span class="Apple-converted-space">      </span>if(first==="enemy") queueText(`${enemy.name} utilise ${eMove.name} !`);</p>
+<p class="p1"><span class="Apple-converted-space">      </span>pushAction(() =&gt; {</p>
+<p class="p1"><span class="Apple-converted-space">        </span>if(checkEndFight()) return;</p>
+<p class="p1"><span class="Apple-converted-space">        </span>resolveMove(first==="player"?player:enemy, first==="player"?enemy:player, first==="player"?pMove:eMove);</p>
+<p class="p1"><span class="Apple-converted-space">        </span>endTurnStatusTick(first==="player"?enemy:player);</p>
+<p class="p1"><span class="Apple-converted-space">        </span>checkEndFight();</p>
+<p class="p1"><span class="Apple-converted-space">      </span>}, 0);</p>
+<p class="p2"><br></p>
+<p class="p1"><span class="Apple-converted-space">      </span>pushAction(() =&gt; {</p>
+<p class="p1"><span class="Apple-converted-space">        </span>if(checkEndFight()) return;</p>
+<p class="p1"><span class="Apple-converted-space">        </span>if(second==="enemy") queueText(`${enemy.name} utilise ${eMove.name} !`);</p>
+<p class="p1"><span class="Apple-converted-space">        </span>resolveMove(second==="player"?player:enemy, second==="player"?enemy:player, second==="player"?pMove:eMove);</p>
+<p class="p1"><span class="Apple-converted-space">        </span>endTurnStatusTick(second==="player"?enemy:player);</p>
+<p class="p2"><br></p>
+<p class="p1"><span class="Apple-converted-space">        </span>endTurnStatusTick(player);</p>
+<p class="p1"><span class="Apple-converted-space">        </span>endTurnStatusTick(enemy);</p>
+<p class="p2"><br></p>
+<p class="p1"><span class="Apple-converted-space">        </span>if(!checkEndFight()){</p>
+<p class="p1"><span class="Apple-converted-space">          </span>phase="PLAYER_MENU";</p>
+<p class="p1"><span class="Apple-converted-space">          </span>openMenu(["ATTAQUES"]);</p>
+<p class="p1"><span class="Apple-converted-space">        </span>}</p>
+<p class="p1"><span class="Apple-converted-space">      </span>}, 0);</p>
+<p class="p1"><span class="Apple-converted-space">    </span>}, 0);</p>
+<p class="p1"><span class="Apple-converted-space">  </span>}</p>
+<p class="p2"><br></p>
+<p class="p1"><span class="Apple-converted-space">  </span>/* =======================</p>
+<p class="p1"><span class="Apple-converted-space">     </span>INPUT</p>
+<p class="p1"><span class="Apple-converted-space">  </span>======================= */</p>
+<p class="p1"><span class="Apple-converted-space">  </span>document.addEventListener("keydown",(e)=&gt;{</p>
+<p class="p1"><span class="Apple-converted-space">    </span>if(UI.inputCooldown&gt;0) return;</p>
+<p class="p1"><span class="Apple-converted-space">    </span>const key = e.key;</p>
+<p class="p2"><br></p>
+<p class="p1"><span class="Apple-converted-space">    </span>if(gameState==="TITLE"){</p>
+<p class="p1"><span class="Apple-converted-space">      </span>if(key==="Enter"){</p>
+<p class="p1"><span class="Apple-converted-space">        </span>gameState="FIGHT";</p>
+<p class="p1"><span class="Apple-converted-space">        </span>startFight(0);</p>
+<p class="p1"><span class="Apple-converted-space">        </span>UI.inputCooldown=150;</p>
+<p class="p1"><span class="Apple-converted-space">      </span>}</p>
+<p class="p1"><span class="Apple-converted-space">      </span>return;</p>
+<p class="p1"><span class="Apple-converted-space">    </span>}</p>
+<p class="p2"><br></p>
+<p class="p1"><span class="Apple-converted-space">    </span>if(gameState==="ENDING"){</p>
+<p class="p1"><span class="Apple-converted-space">      </span>if(key==="Enter") startTitle();</p>
+<p class="p1"><span class="Apple-converted-space">      </span>return;</p>
+<p class="p1"><span class="Apple-converted-space">    </span>}</p>
+<p class="p2"><br></p>
+<p class="p1"><span class="Apple-converted-space">    </span>if(gameState==="LOST"){</p>
+<p class="p1"><span class="Apple-converted-space">      </span>if(key==="Enter") startTitle();</p>
+<p class="p1"><span class="Apple-converted-space">      </span>return;</p>
+<p class="p1"><span class="Apple-converted-space">    </span>}</p>
+<p class="p2"><br></p>
+<p class="p1"><span class="Apple-converted-space">    </span>if(UI.text || UI.typing || UI.queue.length&gt;0){</p>
+<p class="p1"><span class="Apple-converted-space">      </span>if(key==="Enter"){</p>
+<p class="p1"><span class="Apple-converted-space">        </span>const progressed = finishOrNextText();</p>
+<p class="p1"><span class="Apple-converted-space">        </span>if(!progressed){</p>
+<p class="p1"><span class="Apple-converted-space">          </span>if(gameState==="ENDING_PENDING"){</p>
+<p class="p1"><span class="Apple-converted-space">            </span>startEnding();</p>
+<p class="p1"><span class="Apple-converted-space">            </span>UI.inputCooldown=150;</p>
+<p class="p1"><span class="Apple-converted-space">            </span>return;</p>
+<p class="p1"><span class="Apple-converted-space">          </span>}</p>
+<p class="p2"><br></p>
+<p class="p1"><span class="Apple-converted-space">          </span>if(enemy &amp;&amp; enemy.hp&lt;=0){</p>
+<p class="p1"><span class="Apple-converted-space">            </span>const next = fightIndex + 1;</p>
+<p class="p1"><span class="Apple-converted-space">            </span>if(next &lt; campaign.length){</p>
+<p class="p1"><span class="Apple-converted-space">              </span>startFight(next);</p>
+<p class="p1"><span class="Apple-converted-space">              </span>UI.inputCooldown=150;</p>
+<p class="p1"><span class="Apple-converted-space">              </span>return;</p>
+<p class="p1"><span class="Apple-converted-space">            </span>}</p>
+<p class="p1"><span class="Apple-converted-space">          </span>}</p>
+<p class="p2"><br></p>
+<p class="p1"><span class="Apple-converted-space">          </span>if(gameState==="FIGHT"){</p>
+<p class="p1"><span class="Apple-converted-space">            </span>phase="PLAYER_MENU";</p>
+<p class="p1"><span class="Apple-converted-space">            </span>openMenu(["ATTAQUES"]);</p>
+<p class="p1"><span class="Apple-converted-space">          </span>}</p>
+<p class="p1"><span class="Apple-converted-space">        </span>}</p>
+<p class="p1"><span class="Apple-converted-space">        </span>UI.inputCooldown=120;</p>
+<p class="p1"><span class="Apple-converted-space">      </span>}</p>
+<p class="p1"><span class="Apple-converted-space">      </span>return;</p>
+<p class="p1"><span class="Apple-converted-space">    </span>}</p>
+<p class="p2"><br></p>
+<p class="p1"><span class="Apple-converted-space">    </span>if(!UI.menu) return;</p>
+<p class="p2"><br></p>
+<p class="p1"><span class="Apple-converted-space">    </span>if(key==="ArrowUp") UI.menuIdx = Math.max(0, UI.menuIdx-1);</p>
+<p class="p1"><span class="Apple-converted-space">    </span>if(key==="ArrowDown") UI.menuIdx = Math.min(UI.menuItems.length-1, UI.menuIdx+1);</p>
+<p class="p2"><br></p>
+<p class="p1"><span class="Apple-converted-space">    </span>if(key==="Enter"){</p>
+<p class="p1"><span class="Apple-converted-space">      </span>const choice = UI.menuItems[UI.menuIdx];</p>
+<p class="p1"><span class="Apple-converted-space">      </span>if(choice==="ATTAQUES"){</p>
+<p class="p1"><span class="Apple-converted-space">        </span>phase="PLAYER_MOVES";</p>
+<p class="p1"><span class="Apple-converted-space">        </span>openMenu(player.moves.map(m=&gt;m.name));</p>
+<p class="p1"><span class="Apple-converted-space">      </span>} else {</p>
+<p class="p1"><span class="Apple-converted-space">        </span>if(phase==="PLAYER_MOVES"){</p>
+<p class="p1"><span class="Apple-converted-space">          </span>const moveIdx = UI.menuIdx;</p>
+<p class="p1"><span class="Apple-converted-space">          </span>phase="RESOLVE";</p>
+<p class="p1"><span class="Apple-converted-space">          </span>playerChooseMove(moveIdx);</p>
+<p class="p1"><span class="Apple-converted-space">        </span>}</p>
+<p class="p1"><span class="Apple-converted-space">      </span>}</p>
+<p class="p1"><span class="Apple-converted-space">      </span>UI.inputCooldown=120;</p>
+<p class="p1"><span class="Apple-converted-space">    </span>}</p>
+<p class="p1"><span class="Apple-converted-space">  </span>});</p>
+<p class="p2"><br></p>
+<p class="p1"><span class="Apple-converted-space">  </span>/* =======================</p>
+<p class="p1"><span class="Apple-converted-space">     </span>DRAW helpers</p>
+<p class="p1"><span class="Apple-converted-space">  </span>======================= */</p>
+<p class="p1"><span class="Apple-converted-space">  </span>function drawBox(x,y,w,h){</p>
+<p class="p1"><span class="Apple-converted-space">    </span>if(IMG.textbox){</p>
+<p class="p1"><span class="Apple-converted-space">      </span>ctx.drawImage(IMG.textbox, x, y, w, h);</p>
+<p class="p1"><span class="Apple-converted-space">      </span>return;</p>
+<p class="p1"><span class="Apple-converted-space">    </span>}</p>
+<p class="p1"><span class="Apple-converted-space">    </span>ctx.fillStyle="#f8f8f8";</p>
+<p class="p1"><span class="Apple-converted-space">    </span>ctx.fillRect(x,y,w,h);</p>
+<p class="p1"><span class="Apple-converted-space">    </span>ctx.strokeStyle="#111";</p>
+<p class="p1"><span class="Apple-converted-space">    </span>ctx.lineWidth=1;</p>
+<p class="p1"><span class="Apple-converted-space">    </span>ctx.strokeRect(x,y,w,h);</p>
+<p class="p1"><span class="Apple-converted-space">  </span>}</p>
+<p class="p2"><br></p>
+<p class="p1"><span class="Apple-converted-space">  </span>function drawHPBar(x,y,hp,maxHP){</p>
+<p class="p1"><span class="Apple-converted-space">    </span>const w=48,h=4;</p>
+<p class="p1"><span class="Apple-converted-space">    </span>const ratio = hp/maxHP;</p>
+<p class="p1"><span class="Apple-converted-space">    </span>const filled = Math.floor(w*ratio);</p>
+<p class="p1"><span class="Apple-converted-space">    </span>let col="#2a7";</p>
+<p class="p1"><span class="Apple-converted-space">    </span>if(filled&lt;10) col="#c22";</p>
+<p class="p1"><span class="Apple-converted-space">    </span>else if(filled&lt;27) col="#ca2";</p>
+<p class="p2"><br></p>
+<p class="p1"><span class="Apple-converted-space">    </span>ctx.fillStyle="#111";</p>
+<p class="p1"><span class="Apple-converted-space">    </span>ctx.fillRect(x-1,y-1,w+2,h+2);</p>
+<p class="p1"><span class="Apple-converted-space">    </span>ctx.fillStyle="#eee";</p>
+<p class="p1"><span class="Apple-converted-space">    </span>ctx.fillRect(x,y,w,h);</p>
+<p class="p1"><span class="Apple-converted-space">    </span>ctx.fillStyle=col;</p>
+<p class="p1"><span class="Apple-converted-space">    </span>ctx.fillRect(x,y,filled,h);</p>
+<p class="p1"><span class="Apple-converted-space">  </span>}</p>
+<p class="p2"><br></p>
+<p class="p1"><span class="Apple-converted-space">  </span>function drawSprite(key,x,y){</p>
+<p class="p1"><span class="Apple-converted-space">    </span>const img = IMG[key];</p>
+<p class="p1"><span class="Apple-converted-space">    </span>if(img) ctx.drawImage(img,x,y,64,64);</p>
+<p class="p1"><span class="Apple-converted-space">    </span>else{</p>
+<p class="p1"><span class="Apple-converted-space">      </span>ctx.fillStyle="#333";</p>
+<p class="p1"><span class="Apple-converted-space">      </span>ctx.fillRect(x,y,64,64);</p>
+<p class="p1"><span class="Apple-converted-space">      </span>ctx.fillStyle="#111";</p>
+<p class="p1"><span class="Apple-converted-space">      </span>ctx.fillText(key, x+4, y+16);</p>
+<p class="p1"><span class="Apple-converted-space">    </span>}</p>
+<p class="p1"><span class="Apple-converted-space">  </span>}</p>
+<p class="p2"><br></p>
+<p class="p1"><span class="Apple-converted-space">  </span>function drawOverlay(){</p>
+<p class="p1"><span class="Apple-converted-space">    </span>if(!FX.overlay) return;</p>
+<p class="p1"><span class="Apple-converted-space">    </span>const {kind,x,y,t} = FX.overlay;</p>
+<p class="p1"><span class="Apple-converted-space">    </span>ctx.fillStyle="#111";</p>
+<p class="p1"><span class="Apple-converted-space">    </span>ctx.textAlign="center";</p>
+<p class="p1"><span class="Apple-converted-space">    </span>if(kind==="confusion"){</p>
+<p class="p1"><span class="Apple-converted-space">      </span>const dx = Math.sin(t/3)*4;</p>
+<p class="p1"><span class="Apple-converted-space">      </span>ctx.fillText("???", x+dx, y-18);</p>
+<p class="p1"><span class="Apple-converted-space">    </span>} else if(kind==="sleep"){</p>
+<p class="p1"><span class="Apple-converted-space">      </span>ctx.fillText("Zzz", x, y-18);</p>
+<p class="p1"><span class="Apple-converted-space">    </span>} else if(kind==="burn"){</p>
+<p class="p1"><span class="Apple-converted-space">      </span>ctx.fillText("🔥", x, y-18);</p>
+<p class="p1"><span class="Apple-converted-space">    </span>} else if(kind==="protect"){</p>
+<p class="p1"><span class="Apple-converted-space">      </span>ctx.fillText("⛨", x, y-18);</p>
+<p class="p1"><span class="Apple-converted-space">    </span>} else if(kind==="heal"){</p>
+<p class="p1"><span class="Apple-converted-space">      </span>ctx.fillText("+", x, y-18);</p>
+<p class="p1"><span class="Apple-converted-space">    </span>}</p>
+<p class="p1"><span class="Apple-converted-space">    </span>ctx.textAlign="left";</p>
+<p class="p1"><span class="Apple-converted-space">  </span>}</p>
+<p class="p2"><br></p>
+<p class="p1"><span class="Apple-converted-space">  </span>function drawFloatText(){</p>
+<p class="p1"><span class="Apple-converted-space">    </span>if(!FX.floatText) return;</p>
+<p class="p1"><span class="Apple-converted-space">    </span>ctx.fillStyle="#111";</p>
+<p class="p1"><span class="Apple-converted-space">    </span>ctx.textAlign="center";</p>
+<p class="p1"><span class="Apple-converted-space">    </span>ctx.fillText(FX.floatText.text, FX.floatText.x, FX.floatText.y);</p>
+<p class="p1"><span class="Apple-converted-space">    </span>ctx.textAlign="left";</p>
+<p class="p1"><span class="Apple-converted-space">  </span>}</p>
+<p class="p2"><br></p>
+<p class="p1"><span class="Apple-converted-space">  </span>function drawTextbox(){</p>
+<p class="p1"><span class="Apple-converted-space">    </span>if(!UI.text &amp;&amp; !UI.typing &amp;&amp; UI.queue.length===0) return;</p>
+<p class="p1"><span class="Apple-converted-space">    </span>drawBox(8,168,304,64);</p>
+<p class="p1"><span class="Apple-converted-space">    </span>ctx.fillStyle="#111";</p>
+<p class="p1"><span class="Apple-converted-space">    </span>const lines=(UI.visible||UI.text).split("\n");</p>
+<p class="p1"><span class="Apple-converted-space">    </span>for(let i=0;i&lt;Math.min(3,lines.length);i++){</p>
+<p class="p1"><span class="Apple-converted-space">      </span>ctx.fillText(lines[i],16,188+i*14);</p>
+<p class="p1"><span class="Apple-converted-space">    </span>}</p>
+<p class="p1"><span class="Apple-converted-space">  </span>}</p>
+<p class="p2"><br></p>
+<p class="p1"><span class="Apple-converted-space">  </span>function drawMenu(){</p>
+<p class="p1"><span class="Apple-converted-space">    </span>if(!UI.menu) return;</p>
+<p class="p1"><span class="Apple-converted-space">    </span>drawBox(8,168,304,64);</p>
+<p class="p1"><span class="Apple-converted-space">    </span>ctx.fillStyle="#111";</p>
+<p class="p2"><br></p>
+<p class="p1"><span class="Apple-converted-space">    </span>UI.blinkT++;</p>
+<p class="p1"><span class="Apple-converted-space">    </span>const showCur = (Math.floor(UI.blinkT/20)%2)===0;</p>
+<p class="p2"><br></p>
+<p class="p1"><span class="Apple-converted-space">    </span>for(let i=0;i&lt;Math.min(4,UI.menuItems.length);i++){</p>
+<p class="p1"><span class="Apple-converted-space">      </span>const y = 188 + i*14;</p>
+<p class="p1"><span class="Apple-converted-space">      </span>if(i===UI.menuIdx &amp;&amp; showCur){</p>
+<p class="p1"><span class="Apple-converted-space">        </span>if(IMG.cursor) ctx.drawImage(IMG.cursor, 16, y-10, 12, 12);</p>
+<p class="p1"><span class="Apple-converted-space">        </span>else ctx.fillText("▶", 16, y);</p>
+<p class="p1"><span class="Apple-converted-space">      </span>}</p>
+<p class="p1"><span class="Apple-converted-space">      </span>ctx.fillText(UI.menuItems[i], 32, y);</p>
+<p class="p1"><span class="Apple-converted-space">    </span>}</p>
+<p class="p1"><span class="Apple-converted-space">  </span>}</p>
+<p class="p2"><br></p>
+<p class="p1"><span class="Apple-converted-space">  </span>function drawBattleScene(){</p>
+<p class="p1"><span class="Apple-converted-space">    </span>if(IMG.battle) ctx.drawImage(IMG.battle,0,0,W,H);</p>
+<p class="p1"><span class="Apple-converted-space">    </span>else{</p>
+<p class="p1"><span class="Apple-converted-space">      </span>ctx.fillStyle="#e9e2b8";</p>
+<p class="p1"><span class="Apple-converted-space">      </span>ctx.fillRect(0,0,W,H);</p>
+<p class="p1"><span class="Apple-converted-space">      </span>ctx.fillStyle="#b8b07d";</p>
+<p class="p1"><span class="Apple-converted-space">      </span>ctx.fillRect(180,110,110,20);</p>
+<p class="p1"><span class="Apple-converted-space">      </span>ctx.fillRect(20,160,120,20);</p>
+<p class="p1"><span class="Apple-converted-space">    </span>}</p>
+<p class="p2"><br></p>
+<p class="p1"><span class="Apple-converted-space">    </span>drawSprite(enemy.spriteKey, 210, 40);</p>
+<p class="p1"><span class="Apple-converted-space">    </span>drawSprite(player.spriteKey, 40, 110);</p>
+<p class="p2"><br></p>
+<p class="p1"><span class="Apple-converted-space">    </span>drawBox(12,16,160,38);</p>
+<p class="p1"><span class="Apple-converted-space">    </span>ctx.fillStyle="#111";</p>
+<p class="p1"><span class="Apple-converted-space">    </span>ctx.fillText(enemy.name,18,30);</p>
+<p class="p1"><span class="Apple-converted-space">    </span>drawHPBar(18,38,enemy.hp,enemy.maxHP);</p>
+<p class="p1"><span class="Apple-converted-space">    </span>ctx.fillText(`HP ${enemy.hp}/${enemy.maxHP}`, 18, 52);</p>
+<p class="p2"><br></p>
+<p class="p1"><span class="Apple-converted-space">    </span>drawBox(148,120,164,38);</p>
+<p class="p1"><span class="Apple-converted-space">    </span>ctx.fillStyle="#111";</p>
+<p class="p1"><span class="Apple-converted-space">    </span>ctx.fillText("Rémy",154,134);</p>
+<p class="p1"><span class="Apple-converted-space">    </span>ctx.fillText("Recherche / Blague",154,146);</p>
+<p class="p1"><span class="Apple-converted-space">    </span>drawHPBar(154,152,player.hp,player.maxHP);</p>
+<p class="p1"><span class="Apple-converted-space">    </span>ctx.fillText(`HP ${player.hp}/${player.maxHP}`,154,166);</p>
+<p class="p2"><br></p>
+<p class="p1"><span class="Apple-converted-space">    </span>drawOverlay();</p>
+<p class="p1"><span class="Apple-converted-space">    </span>drawFloatText();</p>
+<p class="p1"><span class="Apple-converted-space">  </span>}</p>
+<p class="p2"><br></p>
+<p class="p1"><span class="Apple-converted-space">  </span>function drawTitle(){</p>
+<p class="p1"><span class="Apple-converted-space">    </span>ctx.fillStyle="#f3f0da";</p>
+<p class="p1"><span class="Apple-converted-space">    </span>ctx.fillRect(0,0,W,H);</p>
+<p class="p1"><span class="Apple-converted-space">    </span>ctx.fillStyle="#111";</p>
+<p class="p1"><span class="Apple-converted-space">    </span>ctx.textAlign="center";</p>
+<p class="p1"><span class="Apple-converted-space">    </span>ctx.fillText("BRIOUDE 2026",160,60);</p>
+<p class="p1"><span class="Apple-converted-space">    </span>ctx.fillText("a tale of AURA",160,78);</p>
+<p class="p1"><span class="Apple-converted-space">    </span>ctx.textAlign="left";</p>
+<p class="p1"><span class="Apple-converted-space">    </span>drawTextbox();</p>
+<p class="p1"><span class="Apple-converted-space">  </span>}</p>
+<p class="p2"><br></p>
+<p class="p1"><span class="Apple-converted-space">  </span>function drawEnding(){</p>
+<p class="p1"><span class="Apple-converted-space">    </span>ctx.fillStyle="#000";</p>
+<p class="p1"><span class="Apple-converted-space">    </span>ctx.fillRect(0,0,W,H);</p>
+<p class="p1"><span class="Apple-converted-space">    </span>ctx.fillStyle="#fff";</p>
+<p class="p1"><span class="Apple-converted-space">    </span>ctx.textAlign="center";</p>
+<p class="p1"><span class="Apple-converted-space">    </span>const text=(UI.visible||UI.text||"");</p>
+<p class="p1"><span class="Apple-converted-space">    </span>const lines=text.split("\n");</p>
+<p class="p1"><span class="Apple-converted-space">    </span>let y=60;</p>
+<p class="p1"><span class="Apple-converted-space">    </span>lines.forEach(line=&gt;{ ctx.fillText(line,160,y); y+=16; });</p>
+<p class="p1"><span class="Apple-converted-space">    </span>ctx.textAlign="left";</p>
+<p class="p1"><span class="Apple-converted-space">  </span>}</p>
+<p class="p2"><br></p>
+<p class="p1"><span class="Apple-converted-space">  </span>/* =======================</p>
+<p class="p1"><span class="Apple-converted-space">     </span>LOOP</p>
+<p class="p1"><span class="Apple-converted-space">  </span>======================= */</p>
+<p class="p1"><span class="Apple-converted-space">  </span>let last = performance.now();</p>
+<p class="p1"><span class="Apple-converted-space">  </span>function loop(now){</p>
+<p class="p1"><span class="Apple-converted-space">    </span>const dt = now - last; last = now;</p>
+<p class="p2"><br></p>
+<p class="p1"><span class="Apple-converted-space">    </span>if(UI.inputCooldown&gt;0) UI.inputCooldown -= dt;</p>
+<p class="p1"><span class="Apple-converted-space">    </span>updateText(dt);</p>
+<p class="p1"><span class="Apple-converted-space">    </span>updateFX();</p>
+<p class="p1"><span class="Apple-converted-space">    </span>updateActions(dt);</p>
+<p class="p2"><br></p>
+<p class="p1"><span class="Apple-converted-space">    </span>ctx.save();</p>
+<p class="p1"><span class="Apple-converted-space">    </span>ctx.translate(FX.shakeX, FX.shakeY);</p>
+<p class="p2"><br></p>
+<p class="p1"><span class="Apple-converted-space">    </span>if(gameState==="TITLE") drawTitle();</p>
+<p class="p1"><span class="Apple-converted-space">    </span>else if(gameState==="ENDING") drawEnding();</p>
+<p class="p1"><span class="Apple-converted-space">    </span>else {</p>
+<p class="p1"><span class="Apple-converted-space">      </span>drawBattleScene();</p>
+<p class="p1"><span class="Apple-converted-space">      </span>if(UI.text || UI.typing || UI.queue.length&gt;0) drawTextbox();</p>
+<p class="p1"><span class="Apple-converted-space">      </span>else drawMenu();</p>
+<p class="p1"><span class="Apple-converted-space">    </span>}</p>
+<p class="p2"><br></p>
+<p class="p1"><span class="Apple-converted-space">    </span>ctx.restore();</p>
+<p class="p2"><br></p>
+<p class="p1"><span class="Apple-converted-space">    </span>if(FX.flashFrames&gt;0){</p>
+<p class="p1"><span class="Apple-converted-space">      </span>ctx.fillStyle="rgba(255,255,255,0.6)";</p>
+<p class="p1"><span class="Apple-converted-space">      </span>ctx.fillRect(0,0,W,H);</p>
+<p class="p1"><span class="Apple-converted-space">    </span>}</p>
+<p class="p2"><br></p>
+<p class="p1"><span class="Apple-converted-space">    </span>requestAnimationFrame(loop);</p>
+<p class="p1"><span class="Apple-converted-space">  </span>}</p>
+<p class="p2"><br></p>
+<p class="p1"><span class="Apple-converted-space">  </span>/* =======================</p>
+<p class="p1"><span class="Apple-converted-space">     </span>BOOT</p>
+<p class="p1"><span class="Apple-converted-space">  </span>======================= */</p>
+<p class="p1"><span class="Apple-converted-space">  </span>preloadAssets(()=&gt;{</p>
+<p class="p1"><span class="Apple-converted-space">    </span>startTitle();</p>
+<p class="p1"><span class="Apple-converted-space">    </span>requestAnimationFrame(loop);</p>
+<p class="p1"><span class="Apple-converted-space">  </span>});</p>
+<p class="p2"><br></p>
+<p class="p1">})();</p>
+<p class="p1">&lt;/script&gt;</p>
+<p class="p1">&lt;/body&gt;</p>
+<p class="p1">&lt;/html&gt;</p>
+</body>
+</html>
