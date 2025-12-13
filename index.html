@@ -1,71 +1,893 @@
 <!doctype html>
 <html lang="fr">
 <head>
-<meta charset="utf-8">
-<title>Brioude 2026, a tale of AURA</title>
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<style>
-body{margin:0;background:#000;display:flex;justify-content:center;align-items:center;height:100vh}
-canvas{width:640px;height:480px;image-rendering:pixelated;background:#f3f0da}
-</style>
+  <meta charset="utf-8">
+  <title>Brioude 2026, a tale of AURA</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <style>
+    body{margin:0;background:#000;display:flex;justify-content:center;align-items:center;height:100vh}
+    canvas{width:640px;height:480px;image-rendering:pixelated;background:#f3f0da}
+  </style>
 </head>
 <body>
 <canvas id="game" width="320" height="240"></canvas>
 
 <script>
 (() => {
+  /* =======================
+     CANVAS
+  ======================= */
+  const canvas = document.getElementById("game");
+  const ctx = canvas.getContext("2d");
+  ctx.imageSmoothingEnabled = false;
+  ctx.font = "12px monospace";
+  ctx.textBaseline = "alphabetic";
+  const W = canvas.width, H = canvas.height;
 
-/* ===== CANVAS ===== */
-const canvas = document.getElementById("game");
-const ctx = canvas.getContext("2d");
-ctx.imageSmoothingEnabled = false;
-ctx.font = "12px monospace";
-const W = canvas.width, H = canvas.height;
+  /* =======================
+     ASSETS
+  ======================= */
+  const ASSETS = {
+    sprites: {
+      remy_back: "remy_back.png",
+      wauquiez_front: "wauquiez_front.png",
+      ciotti_front: "ciotti_front.png",
+      maite_front: "maite_front.png",
+      edile_front: "edile_front.png"
+    },
+    background: { battle: "battle_bg.png" },
+    ui: { cursor: "cursor.png", textbox: "textbox.png" }
+  };
 
-/* ===== ASSETS ===== */
-const ASSETS = {
-  sprites:{
-    remy_back:"remy_back.png",
-    wauquiez_front:"wauquiez_front.png",
-    ciotti_front:"ciotti_front.png",
-    maite_front:"maite_front.png",
-    edile_front:"edile_front.png"
-  },
-  background:{ battle:"battle_bg.png" },
-  ui:{ cursor:"cursor.png", textbox:"textbox.png" }
-};
+  const IMG = {};
+  function preloadAssets(done) {
+    const entries = [];
+    for (const k in ASSETS.sprites) entries.push([k, ASSETS.sprites[k]]);
+    for (const k in ASSETS.background) entries.push([k, ASSETS.background[k]]);
+    for (const k in ASSETS.ui) entries.push([k, ASSETS.ui[k]]);
 
-const IMG = {};
-function preload(done){
-  const list=[];
-  Object.values(ASSETS.sprites).forEach(v=>list.push(v));
-  Object.values(ASSETS.background).forEach(v=>list.push(v));
-  Object.values(ASSETS.ui).forEach(v=>list.push(v));
-  let c=0;
-  list.forEach(src=>{
-    const i=new Image();
-    i.onload=()=>{IMG[src.replace(".png","")]=i;if(++c===list.length)done();};
-    i.onerror=()=>{if(++c===list.length)done();};
-    i.src=src;
+    let loaded = 0;
+    const total = entries.length;
+    if (total === 0) return done();
+
+    entries.forEach(([key, src]) => {
+      const img = new Image();
+      img.onload = () => { IMG[key] = img; if (++loaded === total) done(); };
+      img.onerror = () => { console.warn("Asset manquant:", src); if (++loaded === total) done(); };
+      img.src = src;
+    });
+  }
+
+  /* =======================
+     UTILS
+  ======================= */
+  const clamp = (v,a,b)=>Math.max(a,Math.min(b,v));
+  const chance = p => Math.random() < p;
+  const randInt = (a,b)=>Math.floor(Math.random()*(b-a+1))+a;
+
+  /* =======================
+     FX
+  ======================= */
+  const FX = {
+    shakeX:0, shakeY:0, shakeFrames:0,
+    flashFrames:0,
+    overlay:null,
+    floatText:null
+  };
+
+  function startShake(kind){ FX.shakeFrames = (kind==="physical") ? 6 : 8; }
+  function criticalFlash(){ FX.flashFrames = 2; }
+  function setOverlay(kind,x,y,frames=18){ FX.overlay = {kind,x,y,frames,t:0}; }
+
+  function updateFX(){
+    if(FX.shakeFrames>0){
+      FX.shakeX = (Math.random()-0.5)*6;
+      FX.shakeY = (Math.random()-0.5)*4;
+      FX.shakeFrames--;
+    } else { FX.shakeX=FX.shakeY=0; }
+    if(FX.flashFrames>0) FX.flashFrames--;
+    if(FX.overlay){
+      FX.overlay.t++; FX.overlay.frames--;
+      if(FX.overlay.frames<=0) FX.overlay=null;
+    }
+    if(FX.floatText){
+      FX.floatText.y -= 0.25;
+      FX.floatText.frames--;
+      if(FX.floatText.frames<=0) FX.floatText=null;
+    }
+  }
+
+  /* =======================
+     UI
+  ======================= */
+  const UI = {
+    text:"",
+    visible:"",
+    idx:0,
+    typing:false,
+    typeDelay:30,
+    typeT:0,
+    queue:[],
+    menu:false,
+    menuItems:[],
+    menuIdx:0,
+    blinkT:0,
+    inputCooldown:0,
+    // NEW: type de menu pour éviter la logique au texte
+    menuKind:"none" // "root" | "moves" | "none"
+  };
+
+  function showText(msg){
+    UI.text = msg;
+    UI.visible = "";
+    UI.idx = 0;
+    UI.typing = true;
+    UI.typeT = 0;
+    UI.menu = false;
+    UI.menuKind = "none";
+  }
+  function queueText(msg){ UI.queue.push(msg); }
+
+  function finishOrNextText(){
+    if(UI.typing && UI.idx < UI.text.length){
+      UI.visible = UI.text;
+      UI.idx = UI.text.length;
+      UI.typing = false;
+      return true;
+    }
+    if(!UI.typing && UI.queue.length>0){
+      showText(UI.queue.shift());
+      return true;
+    }
+    UI.text=""; UI.visible="";
+    return false;
+  }
+
+  function updateText(dt){
+    if(!UI.typing) return;
+    UI.typeT += dt;
+    while(UI.typeT>=UI.typeDelay && UI.idx<UI.text.length){
+      UI.visible += UI.text[UI.idx++];
+      UI.typeT -= UI.typeDelay;
+    }
+    if(UI.idx>=UI.text.length) UI.typing=false;
+  }
+
+  function openMenu(items, kind){
+    UI.menuItems = items.slice();
+    UI.menuIdx = 0;
+    UI.menu = true;
+    UI.menuKind = kind || "root";
+  }
+
+  /* =======================
+     Types
+  ======================= */
+  const typeChart = {
+    action:       { blague:2, parisianisme:0.5 },
+    blague:       { parisianisme:2, recherche:0.5 },
+    recherche:    { blague:2, parisianisme:0.5 },
+    parisianisme: { action:2, tradition:0.5 },
+    tradition:    { parisianisme:2, recherche:0.5 }
+  };
+
+  function typeMultiplier(attackType, defenderTypes){
+    let m = 1;
+    defenderTypes.forEach(t=>{
+      const v = typeChart[attackType]?.[t];
+      if(v) m *= v;
+    });
+    return m;
+  }
+
+  /* =======================
+     Fighters
+  ======================= */
+  function createFighter(name, types, stats, spriteKey){
+    return {
+      name, types, spriteKey,
+      maxHP:100, hp:100,
+      base:{...stats},
+      mods:{atk:0, def:0, sp:0, spd:0},
+      status:{ burn:false, sleep:0, confusion:0, protected:0 },
+      moves:[],
+      aiProfile:null
+    };
+  }
+
+  function stageMultiplier(stage){
+    const s = clamp(stage, -6, 6);
+    if(s>=0) return 1 + s*0.15;
+    return 1 + s*0.10;
+  }
+
+  function effectiveStat(f,key){
+    const base = f.base[key];
+    const mult = stageMultiplier(f.mods[key] || 0);
+    let v = Math.floor(base * mult);
+    if(key==="atk" && f.status.burn) v = Math.floor(v * 0.5);
+    return Math.max(1, v);
+  }
+
+  function resetBetweenFights(f){
+    f.hp = f.maxHP;
+    f.mods = {atk:0, def:0, sp:0, spd:0};
+    f.status = { burn:false, sleep:0, confusion:0, protected:0 };
+  }
+
+  /* =======================
+     Moves
+     NOTE: j’ai remplacé l’apostrophe typographique ’ par '
+  ======================= */
+  const remyMoves = [
+    { name:"Cahier de recherche", type:"recherche", category:"special", power:28, accuracy:0.95, effects:[{type:"damage"}] },
+    { name:"Plaidoyer", type:"action", category:"status", power:0, accuracy:1.0, effects:[
+      {type:"stat", target:"defender", stat:"def", value:-1},
+      {type:"confusion", target:"defender", chance:0.30}
+    ]},
+    { name:"Bourree auvergnate", type:"tradition", category:"special", power:36, accuracy:0.90, effects:[{type:"damage"}] },
+    { name:"Second degre", type:"blague", category:"physical", power:22, accuracy:0.95, effects:[
+      {type:"damage"},
+      {type:"burn", target:"defender", chance:0.20}
+    ]}
+  ];
+
+  const wauquiezMoves = [
+    { name:"Ce que les francais veulent", type:"parisianisme", category:"status", power:0, accuracy:1.0, effects:[
+      {type:"stat", target:"self", stat:"atk", value:+1},
+      {type:"stat", target:"self", stat:"sp", value:+1},
+      {type:"stat", target:"self", stat:"sp", value:-1} // <- ca s'annule, je laisse tel quel
+    ]},
+    { name:"Dotations publiques", type:"action", category:"status", power:0, accuracy:0.90, effects:[
+      {type:"stat", target:"defender", stat:"def", value:-1},
+      {type:"stat", target:"defender", stat:"sp", value:-1},
+      {type:"sleep", target:"defender", chance:0.25, turns:2}
+    ]},
+    { name:"Mauvaise foi", type:"blague", category:"physical", power:26, accuracy:0.95, effects:[{type:"damage"}] },
+    { name:"Bottes en caoutchouc", type:"tradition", category:"special", power:34, accuracy:1.0, effects:[{type:"chaos", selfChance:0.5}] }
+  ];
+
+  const ciottiMoves = [
+    { name:"Chauvinisme", type:"parisianisme", category:"status", power:0, accuracy:1.0, effects:[{type:"stat", target:"self", stat:"def", value:+1}] },
+    { name:"Accent chantant", type:"tradition", category:"physical", power:24, accuracy:0.95, effects:[{type:"damage"}] },
+    { name:"Retranchement dans le bureau", type:"parisianisme", category:"status", power:0, accuracy:1.0, effects:[{type:"protect", target:"self", turns:2}] },
+    { name:"UDR", type:"blague", category:"physical", power:0, accuracy:1.0, effects:[{type:"noop"}] }
+  ];
+
+  const maiteMoves = [
+    { name:"Ortolan", type:"tradition", category:"status", power:0, accuracy:1.0, effects:[{type:"heal", target:"self", value:20}] },
+    { name:"Aiguille", type:"tradition", category:"special", power:30, accuracy:0.90, effects:[
+      {type:"damage"},
+      {type:"stat", target:"self", stat:"atk", value:+1},
+      {type:"stat", target:"self", stat:"sp", value:+1},
+      {type:"confusion", target:"self", chance:0.15},
+      {type:"confusion", target:"defender", chance:0.30}
+    ]},
+    { name:"Icone", type:"blague", category:"status", power:0, accuracy:1.0, effects:[{type:"stat", target:"self", stat:"sp", value:+1}] },
+    { name:"Indigestion", type:"tradition", category:"special", power:40, accuracy:0.85, effects:[
+      {type:"damage"},
+      {type:"sleep", target:"self", chance:1.0, turns:2}
+    ]}
+  ];
+
+  const edileMoves = [
+    { name:"Conseil municipal", type:"action", category:"status", power:0, accuracy:1.0, effects:[
+      {type:"stat", target:"self", stat:"sp", value:+1},
+      {type:"stat", target:"self", stat:"def", value:+1}
+    ]},
+    { name:"Clientelisme", type:"action", category:"special", power:18, accuracy:0.95, effects:[
+      {type:"damage"},
+      {type:"stat", target:"self", stat:"sp", value:+1},
+      {type:"stat", target:"self", stat:"def", value:+1}
+    ]},
+    { name:"Monsieur le maire", type:"action", category:"status", power:0, accuracy:1.0, effects:[{type:"stat", target:"self", stat:"sp", value:+1}] },
+    { name:"Bon sens paysan", type:"tradition", category:"special", power:26, accuracy:0.90, effects:[
+      {type:"damage"},
+      {type:"confusion", target:"defender", chance:0.25}
+    ]}
+  ];
+
+  /* =======================
+     Stats & campagne
+  ======================= */
+  const HERO_STATS = { atk:55, def:50, sp:65, spd:60 };
+
+  // NEW: identifiants internes ASCII
+  const ENEMY_STATS = {
+    "Laurent Wauquiez": { atk:70, def:45, sp:55, spd:50 },
+    "Eric Ciotti":      { atk:45, def:70, sp:40, spd:55 },
+    "Maite":            { atk:65, def:55, sp:60, spd:35 },
+    "L'Edile":          { atk:50, def:60, sp:70, spd:40 }
+  };
+
+  const campaign = [
+    { name:"Laurent Wauquiez", displayName:"Laurent Wauquiez", types:["parisianisme"], sprite:"wauquiez_front", profile:"wauquiez", moves: wauquiezMoves,
+      quote:"Moi, je connais les territoires Remy." },
+    { name:"Eric Ciotti", displayName:"Eric Ciotti", types:["blague"], sprite:"ciotti_front", profile:"ciotti", moves: ciottiMoves,
+      quote:"C'est quand il y en a beaucoup que ca pose des problemes et tu es deja de trop, Remy." },
+    { name:"Maite", displayName:"Maïté", types:["tradition"], sprite:"maite_front", profile:"maite", moves: maiteMoves,
+      quote:"Miam miam." },
+    { name:"L'Edile", displayName:"L'Édile", types:["action"], sprite:"edile_front", profile:"edile", moves: edileMoves,
+      quote:"Brioude ne sera jamais autrement." }
+  ];
+
+  /* =======================
+     IA
+  ======================= */
+  const AI_PROFILES = {
+    wauquiez: { aggression:0.6, control:0.3, ego:0.8 },
+    ciotti:   { aggression:0.4, control:0.6, ego:0.9 },
+    maite:    { aggression:0.7, control:0.2, ego:0.4 },
+    edile:    { aggression:0.3, control:0.8, ego:0.6 }
+  };
+
+  function analyzeState(self, opp){
+    return {
+      lowHP: self.hp < 30,
+      oppLowHP: opp.hp < 30,
+      oppAsleep: opp.status.sleep > 0,
+      oppConfused: opp.status.confusion > 0
+    };
+  }
+
+  function scoreMove(move, self, opp, prof, st){
+    let s = Math.random();
+    if(move.effects.some(e=>e.type==="protect") && self.status.protected>0) s -= 2;
+
+    if(move.power>0){
+      s += prof.aggression * (move.power/40);
+      const m = typeMultiplier(move.type, opp.types);
+      if(m>1) s += 0.8;
+      if(m<1) s -= 0.4;
+    }
+    if(st.oppLowHP && move.power>=22) s += 1.5;
+
+    if(move.effects.some(e=>e.type==="sleep") && !st.oppAsleep) s += prof.control * 1.2;
+    if(move.effects.some(e=>e.type==="confusion") && !st.oppConfused) s += prof.control;
+
+    if(move.effects.some(e=>e.type==="heal") && st.lowHP) s += 1.8;
+    if(move.category==="status" && !st.lowHP) s += prof.ego * 0.6;
+
+    if(move.effects.some(e=>e.type==="noop")) s -= 10;
+    return s;
+  }
+
+  function chooseEnemyMove(enemy, player){
+    const prof = AI_PROFILES[enemy.aiProfile] || {aggression:0.5, control:0.5, ego:0.5};
+    const st = analyzeState(enemy, player);
+
+    const scored = enemy.moves.map(m=>({m,s:scoreMove(m,enemy,player,prof,st)})).sort((a,b)=>b.s-a.s);
+    if(chance(0.70)) return scored[0].m;
+    return scored[randInt(0, Math.min(2, scored.length-1))].m;
+  }
+
+  /* =======================
+     Combat
+  ======================= */
+  function rollAccuracy(move){
+    if(chance(1/256)) return false;
+    return chance(move.accuracy ?? 1.0);
+  }
+  function rollCrit(attacker){
+    const spd = effectiveStat(attacker, "spd");
+    const p = clamp(0.06 + (spd/200), 0.06, 0.20);
+    return chance(p);
+  }
+  function computeDamage(attacker, defender, move, mult, isCrit){
+    const atk = (move.category==="physical") ? effectiveStat(attacker,"atk") : effectiveStat(attacker,"sp");
+    const def = (move.category==="physical") ? effectiveStat(defender,"def") : effectiveStat(defender,"sp");
+    let dmg = (atk/def) * move.power;
+    dmg *= mult;
+    dmg *= (Math.random()*0.15 + 0.85);
+    if(isCrit) dmg *= 1.95;
+    return Math.max(1, Math.floor(dmg));
+  }
+
+  function applyEffect(effect, attacker, defender, moveCtx){
+    const target = (effect.target==="self") ? attacker : defender;
+
+    switch(effect.type){
+      case "stat":
+        target.mods[effect.stat] = clamp((target.mods[effect.stat]||0) + effect.value, -6, 6);
+        FX.floatText = { text:`${effect.value>0?"+":""}${effect.value} ${effect.stat.toUpperCase()}`, x:160, y:80, frames:30 };
+        return;
+
+      case "burn":
+        if(!target.status.burn && chance(effect.chance||0)){
+          target.status.burn = true;
+          setOverlay("burn", target===player?70:240, target===player?130:70);
+        }
+        return;
+
+      case "sleep":
+        if(chance(effect.chance||0)){
+          target.status.sleep = effect.turns||2;
+          setOverlay("sleep", target===player?70:240, target===player?130:70);
+        }
+        return;
+
+      case "confusion":
+        if(chance(effect.chance||0)){
+          target.status.confusion = randInt(1,4);
+          setOverlay("confusion", target===player?70:240, target===player?130:70);
+        }
+        return;
+
+      case "heal":
+        target.hp = Math.min(target.maxHP, target.hp + (effect.value||0));
+        FX.floatText = { text:"+SOIN", x:160, y:90, frames:35 };
+        setOverlay("heal", target===player?70:240, target===player?130:70);
+        return;
+
+      case "protect":
+        target.status.protected = effect.turns||2;
+        setOverlay("protect", target===player?70:240, target===player?130:70);
+        return;
+
+      case "chaos":
+        moveCtx.chaosSelfHit = chance(effect.selfChance ?? 0.5);
+        return;
+
+      case "noop":
+        return;
+    }
+  }
+
+  function drainHPAnimated(target, amount, after){
+    amount = Math.max(0, amount|0);
+    if(amount===0){ after?.(); return; }
+    let left = amount;
+    const tickMs = 6;
+    const it = setInterval(()=>{
+      if(left<=0 || target.hp<=0){
+        clearInterval(it);
+        after?.();
+        return;
+      }
+      target.hp--;
+      left--;
+    }, tickMs);
+  }
+
+  function endTurnStatusTick(f){
+    if(f.status.burn){
+      const burnDmg = 6;
+      f.hp = Math.max(0, f.hp - burnDmg);
+      FX.floatText = { text:"-BRULURE", x:160, y:92, frames:35 };
+      setOverlay("burn", f===player?70:240, f===player?130:70, 18);
+    }
+    if(f.status.protected>0) f.status.protected--;
+  }
+
+  function resolveMove(attacker, defender, move){
+    if(defender.status.protected>0 && move.power>0){
+      queueText("Mais ca n'atteint pas la cible !");
+      setOverlay("protect", defender===player?70:240, defender===player?130:70);
+      return;
+    }
+
+    if(attacker.status.sleep>0){
+      attacker.status.sleep--;
+      queueText(`${attacker.name} dort...`);
+      setOverlay("sleep", attacker===player?70:240, attacker===player?130:70);
+      return;
+    }
+
+    if(attacker.status.confusion>0){
+      attacker.status.confusion--;
+      queueText(`${attacker.name} est confus...`);
+      setOverlay("confusion", attacker===player?70:240, attacker===player?130:70);
+      if(chance(0.5)){
+        queueText("Il se blesse dans sa confusion !");
+        startShake("physical");
+        drainHPAnimated(attacker, Math.min(12, attacker.hp));
+        return;
+      }
+    }
+
+    if(!rollAccuracy(move)){
+      queueText("Mais ca rate !");
+      return;
+    }
+
+    if(move.category==="physical") startShake("physical");
+    else startShake("special");
+
+    const isCrit = (move.power>0) ? rollCrit(attacker) : false;
+    if(isCrit) criticalFlash();
+
+    const moveCtx = { chaosSelfHit:false };
+    (move.effects||[]).forEach(e=>{ if(e.type==="chaos") applyEffect(e, attacker, defender, moveCtx); });
+
+    if(move.power>0){
+      const mult = typeMultiplier(move.type, defender.types);
+      const dmg = computeDamage(attacker, defender, move, mult, isCrit);
+
+      if(mult>1) queueText("C'est tres efficace !");
+      if(mult<1) queueText("Ce n'est pas tres efficace...");
+
+      if(moveCtx.chaosSelfHit){
+        queueText("Oups... retour de boue !");
+        drainHPAnimated(attacker, Math.min(dmg, attacker.hp));
+      } else {
+        const chaosBonus = (move.effects||[]).some(e=>e.type==="chaos") ? 2 : 1;
+        drainHPAnimated(defender, Math.min(dmg*chaosBonus, defender.hp));
+      }
+    }
+
+    (move.effects||[]).forEach(e=>{
+      if(e.type==="damage" || e.type==="chaos") return;
+      applyEffect(e, attacker, defender, moveCtx);
+    });
+  }
+
+  function computeOrder(p,e){
+    const ps = effectiveStat(p,"spd");
+    const es = effectiveStat(e,"spd");
+    if(ps===es) return chance(0.5) ? ["player","enemy"] : ["enemy","player"];
+    return (ps>es) ? ["player","enemy"] : ["enemy","player"];
+  }
+
+  /* =======================
+     Game state
+  ======================= */
+  let gameState = "TITLE";
+  let fightIndex = 0;
+
+  const player = createFighter("Remy", ["recherche","blague"], HERO_STATS, "remy_back");
+  player.moves = remyMoves;
+
+  let enemy = null;
+
+  function startTitle(){
+    gameState="TITLE";
+    UI.queue=[];
+    showText("BRIOUDE 2026\nA TALE OF AURA\n\nJeu satirique.\nRessemblance volontaire\net caricaturale.\n\nAppuyez sur Entree");
+  }
+
+  function startFight(i){
+    fightIndex = i;
+    const d = campaign[i];
+    enemy = createFighter(d.name, d.types, ENEMY_STATS[d.name], d.sprite);
+    enemy.moves = d.moves;
+    enemy.aiProfile = d.profile;
+
+    resetBetweenFights(player);
+    resetBetweenFights(enemy);
+
+    showText("Un adversaire politique apparait !");
+    queueText(`${d.displayName} entre en scene !`);
+    queueText("Choisis une action.");
+  }
+
+  function startEnding(){
+    gameState="ENDING";
+    UI.queue=[];
+    showText("Bravo.\n\nTu as remporte tous les debats.\n\nMaintenant,\nil est temps de\nMAKE BRIOUDE GREAT AGAIN !");
+  }
+
+  function checkEndFight(){
+    if(enemy && enemy.hp<=0){
+      UI.menu=false;
+      UI.menuKind="none";
+      showText(`${campaign[fightIndex].displayName} est hors debat !`);
+      queueText(campaign[fightIndex].quote);
+
+      const next = fightIndex + 1;
+      queueText("Appuyez sur Entree.");
+      if(next >= campaign.length) gameState="ENDING_PENDING";
+      return true;
+    }
+    if(player.hp<=0){
+      UI.menu=false;
+      UI.menuKind="none";
+      showText("Remy est a court d'arguments...");
+      queueText("Le debat est perdu.");
+      queueText("Appuyez sur Entree.");
+      gameState="LOST";
+      return true;
+    }
+    return false;
+  }
+
+  /* =======================
+     Turn orchestration
+  ======================= */
+  const ACTIONS = [];
+  function pushAction(fn, delayMs=0){ ACTIONS.push({fn, delayMs, t:0}); }
+  function updateActions(dt){
+    if(ACTIONS.length===0) return;
+    const a = ACTIONS[0];
+    a.t += dt;
+    if(a.t >= a.delayMs){
+      ACTIONS.shift();
+      a.fn();
+    }
+  }
+
+  function playerChooseMove(moveIdx){
+    const pMove = player.moves[moveIdx];
+    UI.menu=false;
+    UI.menuKind="none";
+
+    showText(`${player.name} utilise ${pMove.name} !`);
+    const eMove = chooseEnemyMove(enemy, player);
+    const order = computeOrder(player, enemy);
+
+    pushAction(() => {
+      const first = order[0], second = order[1];
+
+      if(first==="enemy") queueText(`${campaign[fightIndex].displayName} utilise ${eMove.name} !`);
+      pushAction(() => {
+        if(checkEndFight()) return;
+        resolveMove(first==="player"?player:enemy, first==="player"?enemy:player, first==="player"?pMove:eMove);
+        endTurnStatusTick(first==="player"?enemy:player);
+        checkEndFight();
+      }, 0);
+
+      pushAction(() => {
+        if(checkEndFight()) return;
+        if(second==="enemy") queueText(`${campaign[fightIndex].displayName} utilise ${eMove.name} !`);
+        resolveMove(second==="player"?player:enemy, second==="player"?enemy:player, second==="player"?pMove:eMove);
+        endTurnStatusTick(second==="player"?enemy:player);
+
+        endTurnStatusTick(player);
+        endTurnStatusTick(enemy);
+
+        if(!checkEndFight()){
+          openMenu(["ATTAQUES"], "root");
+        }
+      }, 0);
+    }, 0);
+  }
+
+  /* =======================
+     INPUT
+  ======================= */
+  document.addEventListener("keydown",(e)=>{
+    if(UI.inputCooldown>0) return;
+    const key = e.key;
+
+    if(gameState==="TITLE"){
+      if(key==="Enter"){
+        gameState="FIGHT";
+        startFight(0);
+        UI.inputCooldown=150;
+      }
+      return;
+    }
+
+    if(gameState==="ENDING" || gameState==="LOST"){
+      if(key==="Enter") startTitle();
+      return;
+    }
+
+    if(UI.text || UI.typing || UI.queue.length>0){
+      if(key==="Enter"){
+        const progressed = finishOrNextText();
+        if(!progressed){
+          if(gameState==="ENDING_PENDING"){
+            startEnding();
+            UI.inputCooldown=150;
+            return;
+          }
+          if(enemy && enemy.hp<=0){
+            const next = fightIndex + 1;
+            if(next < campaign.length){
+              startFight(next);
+              UI.inputCooldown=150;
+              return;
+            }
+          }
+          if(gameState==="FIGHT"){
+            openMenu(["ATTAQUES"], "root");
+          }
+        }
+        UI.inputCooldown=120;
+      }
+      return;
+    }
+
+    if(!UI.menu) return;
+
+    if(key==="ArrowUp") UI.menuIdx = Math.max(0, UI.menuIdx-1);
+    if(key==="ArrowDown") UI.menuIdx = Math.min(UI.menuItems.length-1, UI.menuIdx+1);
+
+    if(key==="Enter"){
+      if(UI.menuKind==="root"){
+        openMenu(player.moves.map(m=>m.name), "moves");
+      } else if(UI.menuKind==="moves"){
+        const moveIdx = UI.menuIdx;
+        playerChooseMove(moveIdx);
+      }
+      UI.inputCooldown=120;
+    }
   });
-}
 
-/* ===== UTILS ===== */
-const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
-const chance=p=>Math.random()<p;
+  /* =======================
+     DRAW
+  ======================= */
+  function drawBox(x,y,w,h){
+    if(IMG.textbox){ ctx.drawImage(IMG.textbox, x, y, w, h); return; }
+    ctx.fillStyle="#f8f8f8";
+    ctx.fillRect(x,y,w,h);
+    ctx.strokeStyle="#111";
+    ctx.lineWidth=1;
+    ctx.strokeRect(x,y,w,h);
+  }
 
-/* ===== FX ===== */
-const FX={sx:0,sy:0,sf:0,flash:0};
-function shake(){FX.sf=6;}
-function updateFX(){
-  if(FX.sf>0){FX.sx=(Math.random()-0.5)*6;FX.sy=(Math.random()-0.5)*4;FX.sf--;}
-  else FX.sx=FX.sy=0;
-  if(FX.flash>0) FX.flash--;
-}
+  function drawHPBar(x,y,hp,maxHP){
+    const w=48,h=4;
+    const ratio = hp/maxHP;
+    const filled = Math.floor(w*ratio);
 
-/* ===== UI ===== */
-const UI={text:"",queue:[],typing:false,i:0,t:0,menu:false,items:[],idx:0};
-function show(t){UI.text=t;UI.typing=true;UI.i=0;UI.t=0;UI.menu=false;}
-function q(t){UI.queue.push(t);}
-function next(){
-  if(UI.typing){UI.typ
+    ctx.fillStyle="#111";
+    ctx.fillRect(x-1,y-1,w+2,h+2);
+    ctx.fillStyle="#eee";
+    ctx.fillRect(x,y,w,h);
+    ctx.fillStyle="#2a7";
+    ctx.fillRect(x,y,filled,h);
+  }
+
+  function drawSprite(key,x,y){
+    const img = IMG[key];
+    if(img) ctx.drawImage(img,x,y,64,64);
+    else{
+      ctx.fillStyle="#333";
+      ctx.fillRect(x,y,64,64);
+      ctx.fillStyle="#111";
+      ctx.fillText(key, x+4, y+16);
+    }
+  }
+
+  function drawOverlay(){
+    if(!FX.overlay) return;
+    const {kind,x,y,t} = FX.overlay;
+    ctx.fillStyle="#111";
+    ctx.textAlign="center";
+    if(kind==="confusion"){
+      const dx = Math.sin(t/3)*4;
+      ctx.fillText("???", x+dx, y-18);
+    } else if(kind==="sleep"){
+      ctx.fillText("Zzz", x, y-18);
+    } else if(kind==="burn"){
+      ctx.fillText("🔥", x, y-18);
+    } else if(kind==="protect"){
+      ctx.fillText("⛨", x, y-18);
+    } else if(kind==="heal"){
+      ctx.fillText("+", x, y-18);
+    }
+    ctx.textAlign="left";
+  }
+
+  function drawFloatText(){
+    if(!FX.floatText) return;
+    ctx.fillStyle="#111";
+    ctx.textAlign="center";
+    ctx.fillText(FX.floatText.text, FX.floatText.x, FX.floatText.y);
+    ctx.textAlign="left";
+  }
+
+  function drawTextbox(){
+    if(!UI.text && !UI.typing && UI.queue.length===0) return;
+    drawBox(8,168,304,64);
+    ctx.fillStyle="#111";
+    const lines=(UI.visible||UI.text).split("\n");
+    for(let i=0;i<Math.min(3,lines.length);i++){
+      ctx.fillText(lines[i],16,188+i*14);
+    }
+  }
+
+  function drawMenu(){
+    if(!UI.menu) return;
+    drawBox(8,168,304,64);
+    ctx.fillStyle="#111";
+
+    UI.blinkT++;
+    const showCur = (Math.floor(UI.blinkT/20)%2)===0;
+
+    for(let i=0;i<Math.min(4,UI.menuItems.length);i++){
+      const y = 188 + i*14;
+      if(i===UI.menuIdx && showCur){
+        if(IMG.cursor) ctx.drawImage(IMG.cursor, 16, y-10, 12, 12);
+        else ctx.fillText("▶", 16, y);
+      }
+      ctx.fillText(UI.menuItems[i], 32, y);
+    }
+  }
+
+  function drawBattleScene(){
+    if(IMG.battle) ctx.drawImage(IMG.battle, 0, 0, W, H);
+    else{
+      ctx.fillStyle="#e9e2b8";
+      ctx.fillRect(0,0,W,H);
+    }
+
+    drawSprite(enemy.spriteKey, 210, 40);
+    drawSprite(player.spriteKey, 40, 110);
+
+    drawBox(12,16,160,38);
+    ctx.fillStyle="#111";
+    ctx.fillText(campaign[fightIndex].displayName,18,30);
+    drawHPBar(18,38,enemy.hp,enemy.maxHP);
+    ctx.fillText(`HP ${enemy.hp}/${enemy.maxHP}`, 18, 52);
+
+    drawBox(148,120,164,38);
+    ctx.fillStyle="#111";
+    ctx.fillText("Remy",154,134);
+    ctx.fillText("Recherche / Blague",154,146);
+    drawHPBar(154,152,player.hp,player.maxHP);
+    ctx.fillText(`HP ${player.hp}/${player.maxHP}`,154,166);
+
+    drawOverlay();
+    drawFloatText();
+  }
+
+  function drawTitle(){
+    ctx.fillStyle="#f3f0da";
+    ctx.fillRect(0,0,W,H);
+    ctx.fillStyle="#111";
+    ctx.textAlign="center";
+    ctx.fillText("BRIOUDE 2026",160,60);
+    ctx.fillText("a tale of AURA",160,78);
+    ctx.textAlign="left";
+    drawTextbox();
+  }
+
+  function drawEnding(){
+    ctx.fillStyle="#000";
+    ctx.fillRect(0,0,W,H);
+    ctx.fillStyle="#fff";
+    ctx.textAlign="center";
+    const text=(UI.visible||UI.text||"");
+    const lines=text.split("\n");
+    let y=60;
+    lines.forEach(line=>{ ctx.fillText(line,160,y); y+=16; });
+    ctx.textAlign="left";
+  }
+
+  /* =======================
+     LOOP
+  ======================= */
+  let last = performance.now();
+  function loop(now){
+    const dt = now - last; last = now;
+
+    if(UI.inputCooldown>0) UI.inputCooldown -= dt;
+    updateText(dt);
+    updateFX();
+    updateActions(dt);
+
+    ctx.save();
+    ctx.translate(FX.shakeX, FX.shakeY);
+
+    if(gameState==="TITLE") drawTitle();
+    else if(gameState==="ENDING") drawEnding();
+    else {
+      drawBattleScene();
+      if(UI.text || UI.typing || UI.queue.length>0) drawTextbox();
+      else drawMenu();
+    }
+
+    ctx.restore();
+
+    if(FX.flashFrames>0){
+      ctx.fillStyle="rgba(255,255,255,0.6)";
+      ctx.fillRect(0,0,W,H);
+    }
+
+    requestAnimationFrame(loop);
+  }
+
+  /* =======================
+     BOOT
+  ======================= */
+  preloadAssets(()=>{
+    startTitle();
+    requestAnimationFrame(loop);
+  });
+
+})();
+</script>
+</body>
+</html>
