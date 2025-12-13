@@ -22,6 +22,7 @@ canvas{
 </style>
 </head>
 <body>
+
 <canvas id="game" width="320" height="240"></canvas>
 
 <script>
@@ -30,16 +31,16 @@ canvas{
 /* =====================
    CANVAS
 ===================== */
-const canvas = document.getElementById("game");
-const ctx = canvas.getContext("2d");
-ctx.imageSmoothingEnabled = false;
-ctx.font = "12px monospace";
-const W = canvas.width, H = canvas.height;
+const canvas=document.getElementById("game");
+const ctx=canvas.getContext("2d");
+ctx.imageSmoothingEnabled=false;
+ctx.font="12px monospace";
+const W=canvas.width,H=canvas.height;
 
 /* =====================
    ASSETS
 ===================== */
-const ASSETS = {
+const ASSETS={
   sprites:{
     remy_back:"remy_back.png",
     wauquiez_front:"wauquiez_front.png",
@@ -53,15 +54,13 @@ const ASSETS = {
 
 const IMG={};
 function preloadAssets(done){
-  const entries=[];
-  Object.entries(ASSETS.sprites).forEach(e=>entries.push(e));
-  Object.entries(ASSETS.background).forEach(e=>entries.push(e));
-  Object.entries(ASSETS.ui).forEach(e=>entries.push(e));
+  const list=[];
+  Object.values(ASSETS).forEach(g=>Object.entries(g).forEach(e=>list.push(e)));
   let loaded=0;
-  entries.forEach(([k,src])=>{
+  list.forEach(([k,src])=>{
     const i=new Image();
-    i.onload=()=>{IMG[k]=i;if(++loaded===entries.length)done();};
-    i.onerror=()=>{console.warn("Missing",src);if(++loaded===entries.length)done();};
+    i.onload=()=>{IMG[k]=i;if(++loaded===list.length)done();};
+    i.onerror=()=>{console.warn("Missing:",src);if(++loaded===list.length)done();};
     i.src=src;
   });
 }
@@ -71,130 +70,310 @@ function preloadAssets(done){
 ===================== */
 const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
 const chance=p=>Math.random()<p;
-const randInt=(a,b)=>Math.floor(Math.random()*(b-a+1))+a;
+const rand=(a,b)=>Math.floor(Math.random()*(b-a+1))+a;
 
 /* =====================
-   FX
+   TYPES
 ===================== */
-const FX={shakeX:0,shakeY:0,shakeFrames:0,flash:0};
-function startShake(){FX.shakeFrames=8;}
-function updateFX(){
-  if(FX.shakeFrames>0){
-    FX.shakeX=(Math.random()-0.5)*4;
-    FX.shakeY=(Math.random()-0.5)*3;
-    FX.shakeFrames--;
-  }else FX.shakeX=FX.shakeY=0;
-  if(FX.flash>0) FX.flash--;
+const TYPE_CHART={
+  action:{ blague:2, parisianisme:0.5 },
+  blague:{ parisianisme:2, recherche:0.5 },
+  recherche:{ blague:2, parisianisme:0.5 },
+  parisianisme:{ action:2, tradition:0.5 },
+  tradition:{ parisianisme:2, recherche:0.5 }
+};
+
+function typeMultiplier(atkType,defTypes){
+  let m=1;
+  defTypes.forEach(t=>{
+    const v=TYPE_CHART[atkType]?.[t];
+    if(v) m*=v;
+  });
+  return m;
 }
 
 /* =====================
-   UI
+   UI TEXTE / MENU
 ===================== */
 const UI={
   text:"",visible:"",idx:0,typing:false,timer:0,
-  queue:[],menu:false,items:[],idxMenu:0,menuKind:"none",
+  queue:[],
+  menu:false,items:[],menuIdx:0,
   cooldown:0
 };
 
 function showText(t){
   UI.text=t;UI.visible="";UI.idx=0;
-  UI.typing=true;UI.timer=0;
-  UI.menu=false;UI.menuKind="none";
+  UI.typing=true;UI.timer=0;UI.menu=false;
 }
 function queueText(t){UI.queue.push(t);}
 function updateText(dt){
-  if(!UI.typing)return;
+  if(!UI.typing) return;
   UI.timer+=dt;
-  if(UI.timer>30 && UI.idx<UI.text.length){
+  if(UI.timer>28 && UI.idx<UI.text.length){
     UI.visible+=UI.text[UI.idx++];
     UI.timer=0;
   }
-  if(UI.idx>=UI.text.length)UI.typing=false;
+  if(UI.idx>=UI.text.length) UI.typing=false;
 }
 function nextText(){
   if(UI.typing){UI.visible=UI.text;UI.typing=false;return true;}
   if(UI.queue.length){showText(UI.queue.shift());return true;}
   UI.text="";return false;
 }
-function openMenu(items,kind){
-  UI.menu=true;UI.items=items;UI.idxMenu=0;UI.menuKind=kind;
+function openMenu(items){
+  UI.menu=true;UI.items=items;UI.menuIdx=0;
 }
 
 /* =====================
-   INTRO ANIMATION
+   COMBATTANTS
 ===================== */
-let gameState="TITLE"; // TITLE INTRO FIGHT ENDING LOST
-let introStart=0;
-const INTRO_DURATION=700;
-
-/* =====================
-   DATA
-===================== */
-const HERO_STATS={atk:55,def:50,sp:65,spd:60};
-
 function createFighter(name,types,stats,sprite){
   return{
     name,types,sprite,
     maxHP:100,hp:100,
-    base:{...stats},mods:{atk:0,def:0,sp:0,spd:0},
+    atk:stats.atk,def:stats.def,spd:stats.spd,
+    status:{ burn:false,sleep:0,confusion:0 },
     moves:[]
   };
 }
 
-const player=createFighter("Remy",["recherche","blague"],HERO_STATS,"remy_back");
-
 /* =====================
-   DRAW HELPERS
+   STATUTS
 ===================== */
-function drawBox(x,y,w,h){
-  if(IMG.textbox) ctx.drawImage(IMG.textbox,x,y,w,h);
-  else{ctx.fillStyle="#fff";ctx.fillRect(x,y,w,h);ctx.strokeRect(x,y,w,h);}
-}
-function drawHPBar(x,y,hp,max){
-  const w=48,h=4;
-  const f=Math.floor(w*(hp/max));
-  ctx.fillStyle="#111";ctx.fillRect(x-1,y-1,w+2,h+2);
-  ctx.fillStyle="#eee";ctx.fillRect(x,y,w,h);
-  ctx.fillStyle="#2a7";ctx.fillRect(x,y,f,h);
-}
-function drawSprite(k,x,y){
-  if(IMG[k]) ctx.drawImage(IMG[k],x,y,64,64);
-}
-
-/* =====================
-   SCENES
-===================== */
-function drawBattle(){
-  if(IMG.battle) ctx.drawImage(IMG.battle,0,0,W,H);
-  else{ctx.fillStyle="#e9e2b8";ctx.fillRect(0,0,W,H);}
-
-  let p=1;
-  if(gameState==="INTRO"){
-    p=Math.min((performance.now()-introStart)/INTRO_DURATION,1);
+function canAct(f){
+  if(f.status.sleep>0){
+    f.status.sleep--;
+    queueText(f.name+" dort...");
+    return false;
   }
-  const ease=p*(2-p);
-
-  drawSprite("wauquiez_front",210+(1-ease)*80,40);
-  drawSprite("remy_back",40-(1-ease)*80,110);
-
-  drawBox(12,16,160,40);
-  ctx.fillStyle="#111";
-  ctx.fillText("Laurent Wauquiez",18,30);
-  drawHPBar(18,40,100,100);
-  ctx.fillText("HP 100/100",18,56);
-
-  drawBox(148,118,164,40);
-  ctx.fillText("Remy",154,132);
-  ctx.fillText("Recherche / Blague",154,144);
-  drawHPBar(154,154,player.hp,player.maxHP);
-  ctx.fillText(`HP ${player.hp}/${player.maxHP}`,154,170);
+  if(f.status.confusion>0){
+    f.status.confusion--;
+    queueText(f.name+" est confus...");
+    if(chance(0.5)){
+      const dmg=Math.max(1,Math.floor(f.maxHP*0.08));
+      f.hp=clamp(f.hp-dmg,0,f.maxHP);
+      queueText("Il se blesse dans sa confusion !");
+      return false;
+    }
+  }
+  return true;
 }
 
-function drawTextbox(){
-  drawBox(8,168,304,64);
-  ctx.fillStyle="#111";
-  const lines=(UI.visible||UI.text).split("\n");
-  lines.slice(0,3).forEach((l,i)=>ctx.fillText(l,16,188+i*14));
+function applyBurn(f){
+  if(!f.status.burn) return;
+  const dmg=Math.max(1,Math.floor(f.maxHP*0.06));
+  f.hp=clamp(f.hp-dmg,0,f.maxHP);
+  queueText(f.name+" souffre de sa brulure !");
+}
+
+/* =====================
+   DONNÉES
+===================== */
+const player=createFighter(
+  "Remy",
+  ["recherche","blague"],
+  {atk:55,def:50,spd:60},
+  "remy_back"
+);
+
+player.moves=[
+  {name:"Cahier de recherche",power:24,type:"recherche"},
+  {name:"Plaidoyer",power:18,type:"action",effect:"confusion"},
+  {name:"Bourree auvergnate",power:28,type:"tradition"},
+  {name:"Second degre",power:20,type:"blague",effect:"burn"}
+];
+
+const CAMPAIGN=[
+  {name:"Laurent Wauquiez",sprite:"wauquiez_front",types:["parisianisme"],stats:{atk:60,def:45,spd:50},quote:"Moi, je connais les territoires Remy."},
+  {name:"Eric Ciotti",sprite:"ciotti_front",types:["blague"],stats:{atk:48,def:65,spd:55},quote:"C'est quand il y en a beaucoup que ca pose des problemes."},
+  {name:"Maite",sprite:"maite_front",types:["tradition"],stats:{atk:65,def:55,spd:35},quote:"Miam miam."},
+  {name:"L'Edile",sprite:"edile_front",types:["action"],stats:{atk:50,def:60,spd:40},quote:"Brioude ne sera jamais autrement."}
+];
+
+/* =====================
+   COMBAT
+===================== */
+function computeDamage(attacker,defender,move){
+  let atk=attacker.atk;
+  if(attacker.status.burn) atk=Math.floor(atk*0.5);
+  const base=(atk/defender.def)*move.power;
+  const randFactor=0.85+Math.random()*0.15;
+  const mult=typeMultiplier(move.type,defender.types);
+  return{
+    value:Math.max(1,Math.floor(base*randFactor*mult)),
+    mult
+  };
+}
+
+/* =====================
+   IA ENNEMIE INTELLIGENTE
+===================== */
+function chooseEnemyMove(enemy,player){
+  let best=null;
+  let bestScore=-Infinity;
+
+  enemy.moves.forEach(m=>{
+    let score=0;
+
+    const mult=typeMultiplier(m.type,player.types);
+    score+=mult*20;
+    score+=m.power;
+
+    if(m.effect==="burn" && !player.status.burn) score+=10;
+    if(m.effect==="confusion" && player.status.confusion===0) score+=8;
+
+    if(player.hp<30) score+=15;
+
+    if(enemy.status.burn) score-=5;
+
+    score+=Math.random()*5;
+
+    if(score>bestScore){
+      bestScore=score;
+      best=m;
+    }
+  });
+  return best;
+}
+
+/* =====================
+   GAME FLOW
+===================== */
+let gameState="TITLE";
+let fightIndex=0;
+let enemy=null;
+
+function startFight(i){
+  const d=CAMPAIGN[i];
+  enemy=createFighter(d.name,d.types,d.stats,d.sprite);
+  enemy.moves=[...player.moves]; // même pool pour simplicité
+  player.hp=player.maxHP;
+  enemy.hp=enemy.maxHP;
+  showText("Un adversaire apparait !");
+  queueText(d.name+" entre en scene !");
+  queueText("Choisis une attaque.");
+  openMenu(player.moves.map(m=>m.name));
+}
+
+function playerAttack(idx){
+  if(!canAct(player)) return;
+  const move=player.moves[idx];
+  UI.menu=false;
+  showText("Remy utilise "+move.name+" !");
+  const res=computeDamage(player,enemy,move);
+  enemy.hp=clamp(enemy.hp-res.value,0,enemy.maxHP);
+
+  if(res.mult>1) queueText("C'est tres efficace !");
+  if(res.mult<1) queueText("Ce n'est pas tres efficace...");
+  queueText(enemy.name+" perd "+res.value+" HP.");
+
+  if(move.effect==="burn" && chance(0.3) && !enemy.status.burn){
+    enemy.status.burn=true;
+    queueText(enemy.name+" est brule !");
+  }
+  if(move.effect==="confusion" && chance(0.4)){
+    enemy.status.confusion=rand(2,4);
+    queueText(enemy.name+" est confus !");
+  }
+
+  applyBurn(enemy);
+
+  if(enemy.hp<=0){
+    queueText(enemy.name+" est hors debat !");
+    queueText(CAMPAIGN[fightIndex].quote);
+    queueText("Appuie sur Entree.");
+    return;
+  }
+
+  enemyTurn();
+}
+
+function enemyTurn(){
+  if(!canAct(enemy)){ applyBurn(enemy); openMenu(player.moves.map(m=>m.name)); return; }
+
+  const move=chooseEnemyMove(enemy,player);
+  queueText(enemy.name+" utilise "+move.name+" !");
+  const res=computeDamage(enemy,player,move);
+  player.hp=clamp(player.hp-res.value,0,player.maxHP);
+
+  if(res.mult>1) queueText("C'est tres efficace !");
+  if(res.mult<1) queueText("Ce n'est pas tres efficace...");
+  queueText("Remy perd "+res.value+" HP.");
+
+  if(move.effect==="burn" && chance(0.3) && !player.status.burn){
+    player.status.burn=true;
+    queueText("Remy est brule !");
+  }
+  if(move.effect==="confusion" && chance(0.4)){
+    player.status.confusion=rand(2,4);
+    queueText("Remy est confus !");
+  }
+
+  applyBurn(player);
+  openMenu(player.moves.map(m=>m.name));
+}
+
+/* =====================
+   INPUT
+===================== */
+document.addEventListener("keydown",e=>{
+  if(UI.cooldown>0) return;
+
+  if(gameState==="TITLE" && e.key==="Enter"){
+    gameState="FIGHT";
+    startFight(0);
+    UI.cooldown=200;
+    return;
+  }
+
+  if(UI.text||UI.typing||UI.queue.length){
+    if(e.key==="Enter"){
+      const done=nextText();
+      if(!done && enemy && enemy.hp<=0){
+        fightIndex++;
+        if(fightIndex<CAMPAIGN.length) startFight(fightIndex);
+        else showText("Bravo.\nMAKE BRIOUDE GREAT AGAIN !");
+      }
+    }
+    return;
+  }
+
+  if(UI.menu){
+    if(e.key==="ArrowUp") UI.menuIdx=(UI.menuIdx+UI.items.length-1)%UI.items.length;
+    if(e.key==="ArrowDown") UI.menuIdx=(UI.menuIdx+1)%UI.items.length;
+    if(e.key==="Enter") playerAttack(UI.menuIdx);
+  }
+});
+
+/* =====================
+   DRAW
+===================== */
+function draw(){
+  ctx.clearRect(0,0,W,H);
+  if(IMG.battle) ctx.drawImage(IMG.battle,0,0,W,H);
+
+  if(enemy){
+    ctx.drawImage(IMG[enemy.sprite],210,40,64,64);
+    ctx.fillText(enemy.name,18,30);
+  }
+  ctx.drawImage(IMG[player.sprite],40,110,64,64);
+
+  if(UI.text||UI.typing){
+    ctx.fillRect(8,168,304,64);
+    ctx.fillStyle="#111";
+    (UI.visible||UI.text).split("\n").slice(0,3)
+      .forEach((l,i)=>ctx.fillText(l,16,188+i*14));
+  }
+
+  if(UI.menu){
+    ctx.fillRect(8,168,304,64);
+    UI.items.forEach((it,i)=>{
+      const y=188+i*14;
+      if(i===UI.menuIdx) ctx.fillText("▶",16,y);
+      ctx.fillText(it,32,y);
+    });
+  }
 }
 
 /* =====================
@@ -203,49 +382,17 @@ function drawTextbox(){
 let last=performance.now();
 function loop(now){
   const dt=now-last;last=now;
-  if(UI.cooldown>0)UI.cooldown-=dt;
-  updateText(dt);updateFX();
-
-  ctx.save();
-  ctx.translate(FX.shakeX,FX.shakeY);
-
-  if(gameState==="TITLE"){
-    ctx.fillStyle="#f3f0da";ctx.fillRect(0,0,W,H);
-    ctx.fillStyle="#111";ctx.textAlign="center";
-    ctx.fillText("BRIOUDE 2026",160,80);
-    ctx.textAlign="left";
-    drawTextbox();
-  }else{
-    drawBattle();
-    if(UI.text||UI.typing) drawTextbox();
-  }
-
-  ctx.restore();
-  if(FX.flash>0){
-    ctx.fillStyle="rgba(255,255,255,0.6)";
-    ctx.fillRect(0,0,W,H);
-  }
+  if(UI.cooldown>0) UI.cooldown-=dt;
+  updateText(dt);
+  draw();
   requestAnimationFrame(loop);
 }
-
-/* =====================
-   INPUT
-===================== */
-document.addEventListener("keydown",e=>{
-  if(UI.cooldown>0)return;
-  if(gameState==="TITLE" && e.key==="Enter"){
-    gameState="INTRO";
-    introStart=performance.now();
-    showText("Un adversaire politique apparait !");
-    UI.cooldown=200;
-  }
-});
 
 /* =====================
    BOOT
 ===================== */
 preloadAssets(()=>{
-  showText("Appuie sur Entree");
+  showText("BRIOUDE 2026\n\nAppuie sur Entree");
   requestAnimationFrame(loop);
 });
 
